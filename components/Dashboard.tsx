@@ -28,6 +28,15 @@ import { generatePDF } from '../services/pdf';
 
 const MEMBERS = ['Anjaneyulu', 'Srinivas', 'Goutham'];
 
+const DEFAULT_SHOPS_DATA = [
+  { name: 'Medical Shop', baseRent: 55000 },
+  { name: 'Sham Home', baseRent: 63000 },
+  { name: 'Brown Bear', baseRent: 45000 },
+  { name: 'Dental', baseRent: 13000 },
+  { name: 'Gym', baseRent: 45000 },
+  { name: 'Bhavya Clinic', baseRent: 10500 },
+];
+
 const Dashboard = ({ user, onLogout }) => {
   const [shops, setShops] = useState([]);
   const [records, setRecords] = useState([]);
@@ -43,9 +52,7 @@ const Dashboard = ({ user, onLogout }) => {
   const [newExpensePayer, setNewExpensePayer] = useState('Shared');
   
   const [loading, setLoading] = useState(true);
-  const [pdfLibraryLoaded, setPdfLibraryLoaded] = useState(false);
 
-  // Load Data from API
   const refreshData = async () => {
     try {
       const data = await api.fetchMonthData(currentMonth);
@@ -64,30 +71,6 @@ const Dashboard = ({ user, onLogout }) => {
     refreshData();
   }, [currentMonth]);
 
-  // PDF Lib loading (same as before)
-  useEffect(() => {
-    const loadScript = (url: string) => {
-      return new Promise((resolve) => {
-        const script = document.createElement('script');
-        script.src = url;
-        script.async = true;
-        script.onload = resolve;
-        document.head.appendChild(script);
-      });
-    };
-
-    const initPdfLibs = async () => {
-      // Use type assertion to access jspdf on window object to fix "Property 'jspdf' does not exist on type 'Window'" error
-      if (!(window as any).jspdf) {
-        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
-        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js');
-      }
-      setPdfLibraryLoaded(true);
-    };
-    initPdfLibs();
-  }, []);
-
-  // Calculations (UNCHANGED Logic)
   const monthlyData = useMemo(() => {
     const received = records
       .filter((r: any) => r.status === 'Paid')
@@ -143,8 +126,16 @@ const Dashboard = ({ user, onLogout }) => {
     return { received, totalExpenses, net, split, settlements, transactions };
   }, [records, expenses]);
 
-  // Actions
   const generateId = () => Math.random().toString(36).substr(2, 9);
+
+  const handleSeedShops = async () => {
+    setLoading(true);
+    for (const shopData of DEFAULT_SHOPS_DATA) {
+      const shop = { id: generateId(), name: shopData.name, baseRent: shopData.baseRent };
+      await api.addShop(currentMonth, shop);
+    }
+    await refreshData();
+  };
 
   const handleSaveShop = async () => {
     if (!newShopName || !newShopRent) return;
@@ -168,8 +159,17 @@ const Dashboard = ({ user, onLogout }) => {
   };
 
   const toggleRentStatus = async (shopId: string, baseRent: number) => {
-    const res = await api.toggleRent(currentMonth, shopId, baseRent, user.name || MEMBERS[0]);
+    const res = await api.toggleRent(currentMonth, shopId, baseRent, MEMBERS[0]);
     setRecords(res.rentRecords);
+  };
+
+  const updateCollectedBy = async (shopId: string, newCollector: string) => {
+    try {
+      const res = await api.updateRentRecord(currentMonth, shopId, { collectedBy: newCollector });
+      setRecords(res.rentRecords);
+    } catch (err) {
+      console.error("Update collector failed", err);
+    }
   };
 
   const addExpense = async () => {
@@ -234,6 +234,16 @@ const Dashboard = ({ user, onLogout }) => {
                 <ChevronRight size={20} />
               </button>
             </div>
+            
+            {/* PDF Export moved to header */}
+            <button 
+              onClick={() => generatePDF(shops, records, expenses, currentMonth, monthlyData)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all shadow-md text-xs active:scale-95 whitespace-nowrap"
+              title="Export PDF Report"
+            >
+              <Download size={16} /> <span className="hidden sm:inline">Export PDF</span>
+            </button>
+
             <button 
               onClick={onLogout}
               className="p-2.5 bg-slate-100 text-slate-500 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100"
@@ -279,6 +289,14 @@ const Dashboard = ({ user, onLogout }) => {
             <section className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
               <div className="p-5 border-b border-slate-50 flex items-center justify-between">
                 <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800"><Building2 className="text-indigo-500" size={20} />Shop Status</h2>
+                {shops.length === 0 && (
+                  <button 
+                    onClick={handleSeedShops}
+                    className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100"
+                  >
+                    <Plus size={14} /> Load Default Shops
+                  </button>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left min-w-[600px]">
@@ -286,7 +304,7 @@ const Dashboard = ({ user, onLogout }) => {
                     <tr className="bg-slate-50/50 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
                       <th className="px-6 py-4">Shop Details</th>
                       <th className="px-4 py-4">Rent Amount</th>
-                      <th className="px-4 py-4 text-center">Status</th>
+                      <th className="px-4 py-4 text-center">Status & Collector</th>
                       <th className="px-4 py-4 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -295,19 +313,32 @@ const Dashboard = ({ user, onLogout }) => {
                       const record: any = records.find((r: any) => r.shopId === shop.id);
                       const isPaid = record?.status === 'Paid';
                       return (
-                        <tr key={shop.id} className="hover:bg-slate-50 transition-colors group">
-                          <td className="px-6 py-4"><span className="font-bold text-slate-700 block text-sm">{shop.name}</span></td>
-                          <td className="px-4 py-4"><div className="font-bold text-slate-600 font-mono bg-slate-100 w-fit px-2 py-1 rounded text-xs">₹{shop.baseRent.toLocaleString()}</div></td>
+                        <tr key={shop.id} className="hover:bg-slate-50/30 transition-colors group">
+                          {/* Strict white background for Shop Name and Rent columns */}
+                          <td className="px-6 py-4 bg-white border-r border-slate-50"><span className="font-bold text-slate-700 block text-sm">{shop.name}</span></td>
+                          <td className="px-4 py-4 bg-white border-r border-slate-50"><div className="font-bold text-indigo-700 font-mono bg-white w-fit px-2 py-1 rounded text-xs border border-indigo-100">₹{shop.baseRent.toLocaleString()}</div></td>
                           <td className="px-4 py-4">
-                            <button 
-                                onClick={() => toggleRentStatus(shop.id, shop.baseRent)}
-                                className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all border w-full justify-center ${
-                                    isPaid ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-white text-slate-400 border-slate-200'
-                                }`}
-                            >
-                                {isPaid ? <CheckCircle2 size={12} /> : <div className="w-3 h-3 rounded-full border-2 border-slate-200"></div>}
-                                {isPaid ? `PAID (${record.collectedBy})` : 'MARK PAID'}
-                            </button>
+                            <div className="flex flex-col gap-2 max-w-[180px] mx-auto">
+                              <button 
+                                  onClick={() => toggleRentStatus(shop.id, shop.baseRent)}
+                                  className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all border w-full justify-center ${
+                                      isPaid ? 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm' : 'bg-white text-slate-400 border-slate-200'
+                                  }`}
+                              >
+                                  {isPaid ? <CheckCircle2 size={12} /> : <div className="w-3 h-3 rounded-full border-2 border-slate-200"></div>}
+                                  {isPaid ? `PAID` : 'MARK PAID'}
+                              </button>
+                              
+                              {isPaid && (
+                                <select 
+                                  className="text-[10px] p-1.5 border rounded-lg bg-white text-slate-600 font-bold outline-none focus:ring-1 focus:ring-indigo-500"
+                                  value={record.collectedBy || MEMBERS[0]}
+                                  onChange={(e) => updateCollectedBy(shop.id, e.target.value)}
+                                >
+                                  {MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-4 text-right">
                             <div className="flex justify-end gap-2">
@@ -323,37 +354,70 @@ const Dashboard = ({ user, onLogout }) => {
               </div>
               <div className="p-5 bg-slate-50/50 border-t border-slate-100">
                 <div className="flex flex-col sm:flex-row gap-3 items-center">
-                  <input type="text" placeholder="Shop Name" className="flex-grow p-3 rounded-lg ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" value={newShopName} onChange={(e) => setNewShopName(e.target.value)} />
-                  <input type="number" placeholder="Rent" className="w-full sm:w-32 p-3 rounded-lg ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" value={newShopRent} onChange={(e) => setNewShopRent(e.target.value)} />
-                  <button onClick={handleSaveShop} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-lg font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm">
+                  <input type="text" placeholder="Shop Name" className="flex-grow p-3 rounded-xl ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm shadow-sm" value={newShopName} onChange={(e) => setNewShopName(e.target.value)} />
+                  <input type="number" placeholder="Rent" className="w-full sm:w-32 p-3 rounded-xl ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm shadow-sm" value={newShopRent} onChange={(e) => setNewShopRent(e.target.value)} />
+                  <button onClick={handleSaveShop} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-slate-200">
                     {editingShopId ? <Save size={16} /> : <Plus size={16} />} {editingShopId ? 'Update' : 'Add'}
                   </button>
-                  {editingShopId && <button onClick={() => { setEditingShopId(null); setNewShopName(''); setNewShopRent(''); }} className="p-3 bg-slate-200 rounded-lg"><X size={16}/></button>}
+                  {editingShopId && <button onClick={() => { setEditingShopId(null); setNewShopName(''); setNewShopRent(''); }} className="p-3 bg-slate-200 rounded-xl"><X size={16}/></button>}
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-white rounded-3xl shadow-xl p-6 border border-slate-100">
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-800">
+                <div className="p-1.5 bg-rose-100 rounded-lg text-rose-600">
+                   <CreditCard size={20} />
+                </div>
+                Quick Expense Record
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Description</label>
+                  <input type="text" placeholder="e.g. Electric Bill" className="w-full p-3 rounded-xl bg-slate-50 ring-1 ring-slate-100 focus:ring-2 focus:ring-rose-500 outline-none text-sm shadow-sm" value={newExpenseDesc} onChange={(e) => setNewExpenseDesc(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Amount</label>
+                  <input type="number" placeholder="0.00" className="w-full p-3 rounded-xl bg-slate-50 ring-1 ring-slate-100 focus:ring-2 focus:ring-rose-500 outline-none text-sm shadow-sm" value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Paid By</label>
+                  <select className="w-full p-3 rounded-xl bg-slate-50 ring-1 ring-slate-100 outline-none text-sm shadow-sm font-bold" value={newExpensePayer} onChange={(e) => setNewExpensePayer(e.target.value)}>
+                      <option value="Shared">Shared / Pool</option>
+                      {MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+                <div className="sm:col-span-4 mt-2">
+                  <button onClick={addExpense} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-lg"><Plus size={16} />Record Expense</button>
                 </div>
               </div>
             </section>
 
             <section className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
               <div className="p-5 border-b border-slate-50 flex items-center justify-between">
-                <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800"><CreditCard className="text-rose-500" size={20} />Expenditures</h2>
+                <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800"><Receipt className="text-rose-500" size={20} />Expenditures List</h2>
                 <div className="bg-rose-50 text-rose-700 px-3 py-1 rounded-lg text-xs font-bold">Total: ₹{monthlyData.totalExpenses.toLocaleString()}</div>
               </div>
               <div className="p-5 space-y-3 custom-scrollbar">
-                {expenses.map((exp: any) => (
-                  <div key={exp.id} className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-100 shadow-sm gap-3">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center"><Receipt size={18} /></div>
-                      <div>
-                        <p className="font-bold text-slate-700 text-sm">{exp.description}</p>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Paid by {exp.paidBy}</p>
+                {expenses.length === 0 ? (
+                  <p className="text-center py-8 text-slate-400 text-sm italic">No expenses recorded for this month.</p>
+                ) : (
+                  expenses.map((exp: any) => (
+                    <div key={exp.id} className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-100 shadow-sm gap-3">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center"><Receipt size={18} /></div>
+                        <div>
+                          <p className="font-bold text-slate-700 text-sm">{exp.description}</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">Paid by {exp.paidBy}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="font-bold text-rose-600 text-lg font-mono">-₹{exp.amount.toLocaleString()}</span>
+                        <button onClick={() => deleteExpense(exp.id)} className="text-slate-300 hover:text-rose-500 p-2"><Trash2 size={16} /></button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="font-bold text-rose-600 text-lg font-mono">-₹{exp.amount.toLocaleString()}</span>
-                      <button onClick={() => deleteExpense(exp.id)} className="text-slate-300 hover:text-rose-500 p-2"><Trash2 size={16} /></button>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </section>
           </div>
@@ -363,7 +427,7 @@ const Dashboard = ({ user, onLogout }) => {
                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><UserCircle size={20} className="text-indigo-500" />Balance Sheet</h3>
                  <div className="space-y-2">
                      {monthlyData.settlements.map((s: any, idx) => (
-                         <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                         <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
                              <div className="text-xs font-bold text-slate-700">{s.member}</div>
                              <div className={`text-xs font-mono font-bold ${s.balance > 0 ? 'text-rose-500' : s.balance < 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
                                  {s.balance > 0 ? `Pays ₹${s.balance.toFixed(0)}` : s.balance < 0 ? `Gets ₹${Math.abs(s.balance).toFixed(0)}` : 'Settled'}
@@ -371,26 +435,14 @@ const Dashboard = ({ user, onLogout }) => {
                          </div>
                      ))}
                  </div>
-                 <button 
-                  onClick={() => generatePDF(shops, records, expenses, currentMonth, monthlyData)}
-                  className="w-full mt-4 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all shadow-lg flex items-center justify-center gap-2 text-sm"
-                 >
-                   <Download size={18} /> Export PDF
-                 </button>
              </section>
 
-            <section className="bg-white rounded-3xl shadow-xl p-5 border border-slate-100">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800"><div className="p-1.5 bg-rose-100 rounded-lg text-rose-600"><CreditCard size={16} /></div>Quick Expense</h3>
-              <div className="space-y-3">
-                <input type="text" placeholder="Description" className="w-full p-3 rounded-lg bg-slate-50 ring-1 ring-slate-100 focus:ring-2 focus:ring-rose-500 outline-none text-sm" value={newExpenseDesc} onChange={(e) => setNewExpenseDesc(e.target.value)} />
-                <input type="number" placeholder="Amount" className="w-full p-3 rounded-lg bg-slate-50 ring-1 ring-slate-100 focus:ring-2 focus:ring-rose-500 outline-none text-sm" value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value)} />
-                <select className="w-full p-3 rounded-lg bg-slate-50 ring-1 ring-slate-100 outline-none text-sm" value={newExpensePayer} onChange={(e) => setNewExpensePayer(e.target.value)}>
-                    <option value="Shared">Shared / Pool</option>
-                    {MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <button onClick={addExpense} className="w-full py-3 bg-slate-900 text-white rounded-lg font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm"><Plus size={16} />Record</button>
-              </div>
-            </section>
+             <div className="bg-amber-50 p-4 rounded-3xl border border-amber-200 flex gap-3 shadow-sm">
+               <AlertCircle size={20} className="text-amber-500 flex-shrink-0" />
+               <p className="text-[10px] text-amber-800 leading-relaxed">
+                 <strong>Shared Access:</strong> All changes made here are visible to other family members using the same Group ID. Rent is split equally (1/3) after expenses.
+               </p>
+             </div>
           </div>
         </div>
       </main>
@@ -407,7 +459,7 @@ const StatCard = ({ title, value, type, icon: Icon }: any) => {
   };
   const style = styles[type];
   return (
-    <div className={`bg-white p-4 rounded-2xl border ${style.border} shadow-sm flex flex-col justify-between min-h-[100px]`}>
+    <div className={`bg-white p-4 rounded-2xl border ${style.border} shadow-sm flex flex-col justify-between min-h-[100px] transition-all hover:shadow-md`}>
       <div className="flex justify-between items-start mb-1">
          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{title}</p>
          <div className={`p-1.5 rounded-lg ${style.iconBg} ${style.iconColor}`}><Icon size={14} /></div>

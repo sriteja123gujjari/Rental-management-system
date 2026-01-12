@@ -1,6 +1,6 @@
 
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 export const generatePDF = (shops: any[], records: any[], expenses: any[], currentMonth: string, monthlyData: any) => {
   const doc = new jsPDF();
@@ -48,15 +48,17 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
   doc.setFontSize(11); doc.text(`Rs. ${monthlyData.split.toLocaleString()}`, margin + (cardWidth + gap) * 2 + 4, cardY + 16);
 
   let currentY = cardY + cardHeight + 15;
-  const tableStyles = { fontSize: 9, cellPadding: 4, fontStyle: 'bold' }; 
-  const headStyles = { fillColor: [59, 130, 246], fontStyle: 'bold', fontSize: 9, cellPadding: 4 };
+  const tableStyles = { fontSize: 9, cellPadding: 4, fontStyle: 'bold' as const }; 
+  const headStyles = { fillColor: [59, 130, 246] as [number, number, number], fontStyle: 'bold' as const, fontSize: 9, cellPadding: 4 };
 
+  // Section 1: Settlement Plan
   if (monthlyData.transactions.length > 0) {
       doc.setFontSize(11);
       doc.setTextColor(30, 41, 59);
       doc.text('Settlement Plan', 14, currentY);
       const transactionBody = monthlyData.transactions.map((t: any) => [t.from, 'pays', t.to, `Rs. ${t.amount.toLocaleString()}`]);
-      (doc as any).autoTable({
+      
+      autoTable(doc, {
           startY: currentY + 4,
           head: [['From', 'Action', 'To', 'Amount']],
           body: transactionBody,
@@ -67,22 +69,65 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
       currentY = (doc as any).lastAutoTable.finalY + 12;
   }
 
+  // Section 2: Shop Payment Details
   const shopBody = shops.map(shop => {
     const rec = records.find(r => r.shopId === shop.id);
-    return [shop.name, `Rs. ${shop.baseRent}`, rec?.status === 'Paid' ? `Paid (${rec.collectedBy})` : 'Unpaid', `Rs. ${rec?.amountPaid || 0}`];
+    const isPaid = rec?.status === 'Paid';
+    return [
+      shop.name, 
+      `Rs. ${shop.baseRent.toLocaleString()}`, 
+      isPaid ? `Paid (${rec.collectedBy})` : 'Unpaid', 
+      `Rs. ${(rec?.amountPaid || 0).toLocaleString()}`
+    ];
   });
 
   doc.setFontSize(11);
   doc.setTextColor(30, 41, 59);
   doc.text('Shop Payment Details', 14, currentY);
-  (doc as any).autoTable({
+  
+  autoTable(doc, {
     startY: currentY + 4,
-    head: [['Shop Name', 'Base Rent', 'Status', 'Paid']],
+    head: [['Shop Name', 'Base Rent', 'Status', 'Paid Amount']],
     body: shopBody,
     theme: 'grid',
-    headStyles: { ...headStyles, fillColor: [71, 85, 105] },
-    styles: tableStyles
+    headStyles: { ...headStyles, fillColor: [71, 85, 105] as [number, number, number] },
+    styles: tableStyles,
+    didParseCell: (data) => {
+      // Column index 2 is "Status"
+      if (data.section === 'body' && data.column.index === 2) {
+        const text = data.cell.text[0] || '';
+        if (text.startsWith('Paid')) {
+          data.cell.styles.textColor = [34, 197, 94]; // Green [34, 197, 94]
+        } else if (text === 'Unpaid') {
+          data.cell.styles.textColor = [239, 68, 68]; // Red [239, 68, 68]
+        }
+      }
+    }
   });
+  currentY = (doc as any).lastAutoTable.finalY + 12;
+
+  // Section 3: Expenditure List
+  if (expenses.length > 0) {
+    doc.setFontSize(11);
+    doc.setTextColor(30, 41, 59);
+    doc.text('Monthly Expenditures', 14, currentY);
+    
+    const expenseBody = expenses.map(exp => [
+      exp.description,
+      exp.paidBy,
+      new Date(exp.timestamp).toLocaleDateString(),
+      `Rs. ${exp.amount.toLocaleString()}`
+    ]);
+
+    autoTable(doc, {
+      startY: currentY + 4,
+      head: [['Description', 'Paid By', 'Date', 'Amount']],
+      body: expenseBody,
+      theme: 'striped',
+      headStyles: { ...headStyles, fillColor: [239, 68, 68] as [number, number, number] },
+      styles: tableStyles
+    });
+  }
 
   doc.save(`Rent_Report_${currentMonth}.pdf`);
 };
