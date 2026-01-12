@@ -1,0 +1,5 @@
+{
+  "name": "Rental Management System",
+  "description": "A comprehensive system for three families to manage and split shared rent and variable expenses with month-wise history tracking and PDF reporting.",
+  "requestFramePermissions": []
+}
