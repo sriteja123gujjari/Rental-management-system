@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Building2, Receipt, Wallet, Users, Download, Plus, Trash2, 
   CheckCircle2, ChevronLeft, ChevronRight, TrendingUp, CreditCard, 
-  Loader2, ArrowRightLeft, UserCircle, Save, AlertCircle, Pencil, X, LogOut, Check
+  Loader2, ArrowRightLeft, UserCircle, Save, AlertCircle, Pencil, X, LogOut, Check, Share2, FileText
 } from 'lucide-react';
 import { api } from '../services/api';
 import { generatePDF } from '../services/pdf';
@@ -17,6 +17,13 @@ const DEFAULT_SHOPS_DATA = [
   { name: 'Gym', baseRent: 45000 },
   { name: 'Bhavya Clinic', baseRent: 10500 },
 ];
+
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('en-IN', {
+    maximumFractionDigits: 0,
+    style: 'decimal',
+  }).format(amount);
+};
 
 const Dashboard = ({ user, onLogout }) => {
   const [shops, setShops] = useState([]);
@@ -33,11 +40,10 @@ const Dashboard = ({ user, onLogout }) => {
   const [newExpensePayer, setNewExpensePayer] = useState('Shared');
   
   const [loading, setLoading] = useState(true);
-  
-  // Loading states
   const [submitting, setSubmitting] = useState(false); 
   const [processingId, setProcessingId] = useState(null); 
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [sharingPdf, setSharingPdf] = useState(false);
   const [pdfSuccess, setPdfSuccess] = useState(false);
 
   const refreshData = async (silent = false) => {
@@ -89,8 +95,8 @@ const Dashboard = ({ user, onLogout }) => {
     });
 
     const transactions: any[] = [];
-    const debtors = settlements.filter(s => s.balance > 0.01).sort((a, b) => b.balance - a.balance);
-    const creditors = settlements.filter(s => s.balance < -0.01).sort((a, b) => a.balance - b.balance);
+    const debtors = settlements.filter(s => s.balance > 1).sort((a, b) => b.balance - a.balance);
+    const creditors = settlements.filter(s => s.balance < -1).sort((a, b) => a.balance - b.balance);
     
     let dIndex = 0;
     let cIndex = 0;
@@ -101,13 +107,13 @@ const Dashboard = ({ user, onLogout }) => {
       const debtor = activeDebtors[dIndex];
       const creditor = activeCreditors[cIndex];
       const amount = Math.min(debtor.balance, Math.abs(creditor.balance));
-      if (amount > 0) {
-        transactions.push({ from: debtor.member, to: creditor.member, amount });
+      if (amount > 1) {
+        transactions.push({ from: debtor.member, to: creditor.member, amount: Math.round(amount) });
       }
       debtor.balance -= amount;
       creditor.balance += amount;
-      if (debtor.balance < 0.01) dIndex++;
-      if (Math.abs(creditor.balance) < 0.01) cIndex++;
+      if (debtor.balance < 1) dIndex++;
+      if (Math.abs(creditor.balance) < 1) cIndex++;
     }
 
     return { received, totalExpenses, net, split, settlements, transactions };
@@ -118,7 +124,7 @@ const Dashboard = ({ user, onLogout }) => {
     setPdfSuccess(false);
     try {
         await new Promise(resolve => setTimeout(resolve, 500));
-        generatePDF(shops, records, expenses, currentMonth, monthlyData);
+        generatePDF(shops, records, expenses, currentMonth, monthlyData, false);
         setPdfSuccess(true);
         setTimeout(() => setPdfSuccess(false), 3000);
     } catch (error) {
@@ -126,6 +132,31 @@ const Dashboard = ({ user, onLogout }) => {
         alert("Failed to generate PDF");
     } finally {
         setDownloadingPdf(false);
+    }
+  };
+
+  const handleSharePDF = async () => {
+    setSharingPdf(true);
+    try {
+      const pdfBlob = generatePDF(shops, records, expenses, currentMonth, monthlyData, true);
+      if (!pdfBlob) throw new Error("PDF generation failed");
+
+      const file = new File([pdfBlob], `Rent_Report_${currentMonth}.pdf`, { type: "application/pdf" });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Monthly Rent Report',
+          text: `Rent Report for ${currentMonth}`,
+        });
+      } else {
+        alert("Sharing not supported on this device. Downloading instead.");
+        generatePDF(shops, records, expenses, currentMonth, monthlyData, false);
+      }
+    } catch (error) {
+      console.error("Share Error", error);
+    } finally {
+      setSharingPdf(false);
     }
   };
 
@@ -150,7 +181,6 @@ const Dashboard = ({ user, onLogout }) => {
             const shop = { name: newShopName, baseRent: Number(newShopRent) };
             await api.addShop(currentMonth, shop);
         }
-        
         setNewShopName('');
         setNewShopRent('');
         await refreshData(true);
@@ -163,7 +193,6 @@ const Dashboard = ({ user, onLogout }) => {
   };
 
   const deleteShop = async (id: string) => {
-    // 1) REMOVED ALERT: Directly delete without confirmation window
     setProcessingId(id);
     await api.deleteShop(currentMonth, id);
     await refreshData(true);
@@ -234,8 +263,6 @@ const Dashboard = ({ user, onLogout }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 text-slate-800 font-sans pb-12 relative">
-        
-      {/* 3) CENTERED SUCCESS MESSAGE OVERLAY */}
       {pdfSuccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
           <div className="bg-white px-8 py-6 rounded-3xl shadow-2xl border border-emerald-100 flex flex-col items-center gap-3 animate-in fade-in zoom-in duration-300 pointer-events-auto">
@@ -247,27 +274,28 @@ const Dashboard = ({ user, onLogout }) => {
         </div>
       )}
 
+      {/* Header */}
       <header className="bg-white border-b sticky top-0 z-20 shadow-sm backdrop-blur-md bg-white/80">
-        <div className="max-w-7xl mx-auto px-4 py-3 sm:h-20 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 py-3 sm:h-24 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-start">
             <div className="bg-indigo-600 p-2 rounded-lg text-white shadow-lg shadow-indigo-200">
               <Building2 size={24} />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900">Gujjari's Rental</h1>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">Gujjari's Rental</h1>
               <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Group: {user.familyId}</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-end">
-            <div className="flex items-center bg-white rounded-xl p-1 border shadow-sm ring-1 ring-slate-100">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+            <div className="flex items-center bg-white rounded-xl p-1 border shadow-sm ring-1 ring-slate-100 w-full sm:w-auto justify-between sm:justify-center">
               <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-slate-50 rounded-lg transition-colors active:scale-95 text-slate-500">
                 <ChevronLeft size={20} />
               </button>
-              <div className="px-4 text-center border-x border-slate-100">
+              <div className="px-4 text-center border-x border-slate-100 flex-grow sm:flex-grow-0">
                  <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Period</span>
                  <span className="font-bold text-slate-800 text-sm whitespace-nowrap">
-                   {new Date(currentMonth + '-01').toLocaleDateString('default', { month: 'long', year: 'numeric' })}
+                   {new Date(currentMonth + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })}
                  </span>
               </div>
               <button onClick={() => changeMonth(1)} className="p-2 hover:bg-slate-50 rounded-lg transition-colors active:scale-95 text-slate-500">
@@ -275,30 +303,31 @@ const Dashboard = ({ user, onLogout }) => {
               </button>
             </div>
             
-            {/* 2) BIGGER PDF BUTTON */}
-            <button 
-              onClick={handleDownloadPDF}
-              disabled={downloadingPdf}
-              className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all shadow-md text-sm active:scale-95 whitespace-nowrap disabled:opacity-70 disabled:cursor-wait"
-              title="Export PDF Report"
-            >
-              {downloadingPdf ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} 
-              <span className="hidden sm:inline">{downloadingPdf ? "Generating..." : "Export PDF"}</span>
-            </button>
+            <div className="flex w-full sm:w-auto gap-2">
+                {/* ✅ DOWNLOAD BUTTON - BACK AT TOP */}
+                <button 
+                  onClick={handleDownloadPDF}
+                  disabled={downloadingPdf}
+                  className="flex-grow sm:flex-grow-0 flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all shadow-md text-sm active:scale-95 whitespace-nowrap disabled:opacity-70 disabled:cursor-wait"
+                >
+                  {downloadingPdf ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} 
+                  <span className="">{downloadingPdf ? "Generating..." : "PDF"}</span>
+                </button>
 
-            <button 
-              onClick={onLogout}
-              className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100"
-              title="Logout"
-            >
-              <LogOut size={20} />
-            </button>
+                <button 
+                  onClick={onLogout}
+                  className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100"
+                  title="Logout"
+                >
+                  <LogOut size={20} />
+                </button>
+            </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <StatCard title="Received" value={monthlyData.received} type="success" icon={TrendingUp} />
           <StatCard title="Expenses" value={monthlyData.totalExpenses} type="danger" icon={Receipt} />
           <StatCard title="Net Profit" value={monthlyData.net} type="primary" icon={Wallet} />
@@ -316,11 +345,11 @@ const Dashboard = ({ user, onLogout }) => {
                       {monthlyData.transactions.map((t: any, idx) => (
                         <div key={idx} className="bg-white/10 backdrop-blur-md rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between border border-white/5 gap-3">
                             <div className="flex items-center gap-3 w-full sm:w-auto">
-                                <div className="bg-rose-500/20 text-rose-300 p-1.5 rounded-lg font-bold text-xs uppercase text-center sm:w-24">{t.from}</div>
+                                <div className="bg-rose-500/20 text-rose-300 p-1.5 rounded-lg font-bold text-xs uppercase text-center w-24">{t.from}</div>
                                 <span className="text-white/50 text-xs">pays</span>
-                                <div className="bg-emerald-500/20 text-emerald-300 p-1.5 rounded-lg font-bold text-xs uppercase text-center sm:w-24">{t.to}</div>
+                                <div className="bg-emerald-500/20 text-emerald-300 p-1.5 rounded-lg font-bold text-xs uppercase text-center w-24">{t.to}</div>
                             </div>
-                            <div className="font-bold text-lg font-mono">₹{t.amount.toLocaleString()}</div>
+                            <div className="font-bold text-lg font-mono">₹{formatCurrency(t.amount)}</div>
                         </div>
                       ))}
                     </div>
@@ -360,7 +389,7 @@ const Dashboard = ({ user, onLogout }) => {
                       return (
                         <tr key={shop.id} className="hover:bg-slate-50/30 transition-colors group">
                           <td className="px-6 py-4 bg-white border-r border-slate-50"><span className="font-bold text-slate-700 block text-sm">{shop.name}</span></td>
-                          <td className="px-4 py-4 bg-white border-r border-slate-50"><div className="font-bold text-indigo-700 font-mono bg-white w-fit px-2 py-1 rounded text-xs border border-indigo-100">₹{shop.baseRent?.toLocaleString() || 0}</div></td>
+                          <td className="px-4 py-4 bg-white border-r border-slate-50"><div className="font-bold text-indigo-700 font-mono bg-white w-fit px-2 py-1 rounded text-xs border border-indigo-100">₹{formatCurrency(shop.baseRent || 0)}</div></td>
                           <td className="px-4 py-4">
                             <div className="flex flex-col gap-2 max-w-[180px] mx-auto">
                               <button 
@@ -403,15 +432,42 @@ const Dashboard = ({ user, onLogout }) => {
                   </tbody>
                 </table>
               </div>
+              
               <div className="p-5 bg-slate-50/50 border-t border-slate-100">
-                <div className="flex flex-col sm:flex-row gap-3 items-center">
-                  <input type="text" placeholder="Shop Name" className="flex-grow p-3 rounded-xl ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm shadow-sm" value={newShopName} onChange={(e) => setNewShopName(e.target.value)} />
-                  <input type="number" placeholder="Rent" className="w-full sm:w-32 p-3 rounded-xl ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm shadow-sm" value={newShopRent} onChange={(e) => setNewShopRent(e.target.value)} />
-                  <button onClick={handleSaveShop} disabled={submitting} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-slate-200 disabled:opacity-70 disabled:cursor-not-allowed">
-                    {submitting ? <Loader2 size={16} className="animate-spin" /> : (editingShopId ? <Save size={16} /> : <Plus size={16} />)} 
-                    {editingShopId ? 'Update' : 'Add'}
-                  </button>
-                  {editingShopId && <button onClick={() => { setEditingShopId(null); setNewShopName(''); setNewShopRent(''); }} className="p-3 bg-slate-200 rounded-xl"><X size={16}/></button>}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="w-full">
+                      <input 
+                        type="text" 
+                        placeholder="Shop Name" 
+                        className="w-full px-4 h-12 rounded-xl ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base sm:text-sm shadow-sm" 
+                        value={newShopName} 
+                        onChange={(e) => setNewShopName(e.target.value)} 
+                      />
+                  </div>
+                  <div className="flex gap-3 w-full sm:w-auto">
+                      <div className="flex-grow sm:w-32">
+                          <input 
+                            type="number" 
+                            placeholder="Rent" 
+                            className="w-full px-4 h-12 rounded-xl ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base sm:text-sm shadow-sm" 
+                            value={newShopRent} 
+                            onChange={(e) => setNewShopRent(e.target.value)} 
+                          />
+                      </div>
+                      <button 
+                        onClick={handleSaveShop} 
+                        disabled={submitting} 
+                        className="h-12 px-6 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-slate-200 disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap"
+                      >
+                        {submitting ? <Loader2 size={16} className="animate-spin" /> : (editingShopId ? <Save size={16} /> : <Plus size={16} />)} 
+                        {editingShopId ? 'Update' : 'Add'}
+                      </button>
+                      {editingShopId && (
+                        <button onClick={() => { setEditingShopId(null); setNewShopName(''); setNewShopRent(''); }} className="h-12 w-12 flex items-center justify-center bg-slate-200 rounded-xl flex-shrink-0">
+                            <X size={16}/>
+                        </button>
+                      )}
+                  </div>
                 </div>
               </div>
             </section>
@@ -423,34 +479,37 @@ const Dashboard = ({ user, onLogout }) => {
                 </div>
                 Quick Expense Record
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
-                <div className="sm:col-span-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Description</label>
-                  <input type="text" placeholder="e.g. Electric Bill" className="w-full p-3 rounded-xl bg-slate-50 ring-1 ring-slate-100 focus:ring-2 focus:ring-rose-500 outline-none text-sm shadow-sm" value={newExpenseDesc} onChange={(e) => setNewExpenseDesc(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Amount</label>
-                  <input type="number" placeholder="0.00" className="w-full p-3 rounded-xl bg-slate-50 ring-1 ring-slate-100 focus:ring-2 focus:ring-rose-500 outline-none text-sm shadow-sm" value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Paid By</label>
-                  <select className="w-full p-3 rounded-xl bg-slate-50 ring-1 ring-slate-100 outline-none text-sm shadow-sm font-bold" value={newExpensePayer} onChange={(e) => setNewExpensePayer(e.target.value)}>
-                      <option value="Shared">Shared / Pool</option>
-                      {MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div className="sm:col-span-4 mt-2">
-                  <button onClick={addExpense} disabled={submitting} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-lg disabled:opacity-70 disabled:cursor-not-allowed">
+              
+              <div className="flex flex-col gap-4">
+                 <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Description</label>
+                    <input type="text" placeholder="e.g. Electric Bill" className="w-full px-4 h-12 rounded-xl bg-slate-50 ring-1 ring-slate-100 focus:ring-2 focus:ring-rose-500 outline-none text-base sm:text-sm shadow-sm" value={newExpenseDesc} onChange={(e) => setNewExpenseDesc(e.target.value)} />
+                 </div>
+                 
+                 <div className="flex gap-3">
+                    <div className="w-1/2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Amount</label>
+                      <input type="number" placeholder="0.00" className="w-full px-4 h-12 rounded-xl bg-slate-50 ring-1 ring-slate-100 focus:ring-2 focus:ring-rose-500 outline-none text-base sm:text-sm shadow-sm" value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value)} />
+                    </div>
+                    <div className="w-1/2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Paid By</label>
+                      <select className="w-full px-2 h-12 rounded-xl bg-slate-50 ring-1 ring-slate-100 outline-none text-sm shadow-sm font-bold" value={newExpensePayer} onChange={(e) => setNewExpensePayer(e.target.value)}>
+                          <option value="Shared">Shared / Pool</option>
+                          {MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                 </div>
+
+                 <button onClick={addExpense} disabled={submitting} className="w-full h-12 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-lg disabled:opacity-70 disabled:cursor-not-allowed">
                       {submitting ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Record Expense
-                  </button>
-                </div>
+                 </button>
               </div>
             </section>
 
             <section className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
               <div className="p-5 border-b border-slate-50 flex items-center justify-between">
                 <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800"><Receipt className="text-rose-500" size={20} />Expenditures List</h2>
-                <div className="bg-rose-50 text-rose-700 px-3 py-1 rounded-lg text-xs font-bold">Total: ₹{monthlyData.totalExpenses.toLocaleString()}</div>
+                <div className="bg-rose-50 text-rose-700 px-3 py-1 rounded-lg text-xs font-bold">Total: ₹{formatCurrency(monthlyData.totalExpenses)}</div>
               </div>
               <div className="p-5 space-y-3 custom-scrollbar">
                 {expenses.length === 0 ? (
@@ -466,7 +525,7 @@ const Dashboard = ({ user, onLogout }) => {
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        <span className="font-bold text-rose-600 text-lg font-mono">-₹{exp.amount.toLocaleString()}</span>
+                        <span className="font-bold text-rose-600 text-lg font-mono">-₹{formatCurrency(exp.amount)}</span>
                         <button onClick={() => deleteExpense(exp.id)} disabled={processingId === exp.id} className="text-slate-300 hover:text-rose-500 p-2">
                             {processingId === exp.id ? <Loader2 size={16} className="animate-spin text-rose-500" /> : <Trash2 size={16} />}
                         </button>
@@ -486,7 +545,7 @@ const Dashboard = ({ user, onLogout }) => {
                          <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
                              <div className="text-xs font-bold text-slate-700">{s.member}</div>
                              <div className={`text-xs font-mono font-bold ${s.balance > 0 ? 'text-rose-500' : s.balance < 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
-                                 {s.balance > 0 ? `Pays ₹${s.balance.toFixed(0)}` : s.balance < 0 ? `Gets ₹${Math.abs(s.balance).toFixed(0)}` : 'Settled'}
+                                 {s.balance > 1 ? `Pays ₹${formatCurrency(s.balance)}` : s.balance < -1 ? `Gets ₹${formatCurrency(Math.abs(s.balance))}` : 'Settled'}
                              </div>
                          </div>
                      ))}
@@ -499,6 +558,19 @@ const Dashboard = ({ user, onLogout }) => {
                  <strong>Shared Access:</strong> All changes made here are visible to other family members using the same Group ID. Rent is split equally (1/3) after expenses.
                </p>
              </div>
+
+             {/* ✅ SHARE BUTTON ONLY AT BOTTOM */}
+             <div className="pb-8">
+                <button 
+                  onClick={handleSharePDF}
+                  disabled={sharingPdf}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg text-base active:scale-95 disabled:opacity-70 disabled:cursor-wait"
+                >
+                  {sharingPdf ? <Loader2 size={20} className="animate-spin" /> : <Share2 size={20} />}
+                  <span>Share via WhatsApp</span>
+                </button>
+             </div>
+
           </div>
         </div>
       </main>
@@ -520,7 +592,7 @@ const StatCard = ({ title, value, type, icon: Icon }: any) => {
          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{title}</p>
          <div className={`p-1.5 rounded-lg ${style.iconBg} ${style.iconColor}`}><Icon size={14} /></div>
       </div>
-      <h3 className={`text-xl font-black tracking-tight ${style.textColor}`}>₹{Math.abs(value).toLocaleString()}</h3>
+      <h3 className={`text-xl font-black tracking-tight ${style.textColor}`}>₹{formatCurrency(Math.abs(value))}</h3>
     </div>
   );
 };

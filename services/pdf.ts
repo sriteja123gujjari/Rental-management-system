@@ -1,7 +1,13 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-export const generatePDF = (shops: any[], records: any[], expenses: any[], currentMonth: string, monthlyData: any) => {
+// ✅ Helper to format numbers like 2,32,145
+const formatIndianCurrency = (amount: number) => {
+  return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(amount);
+};
+
+// Added 'returnBlob' parameter to the end
+export const generatePDF = (shops: any[], records: any[], expenses: any[], currentMonth: string, monthlyData: any, returnBlob: boolean = false) => {
   const doc = new jsPDF();
   const [year, month] = currentMonth.split('-');
   const monthName = new Date(Number(year), Number(month) - 1).toLocaleString('default', { month: 'long' });
@@ -32,19 +38,22 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
   doc.roundedRect(margin, cardY, cardWidth, cardHeight, 2, 2, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(8); doc.text('RECEIVED', margin + 4, cardY + 7);
-  doc.setFontSize(11); doc.text(`Rs. ${monthlyData.received.toLocaleString()}`, margin + 4, cardY + 16);
+  // ✅ CHANGED HERE
+  doc.setFontSize(11); doc.text(`Rs. ${formatIndianCurrency(monthlyData.received)}`, margin + 4, cardY + 16);
 
   // Expenses
   doc.setFillColor(239, 68, 68);
   doc.roundedRect(margin + cardWidth + gap, cardY, cardWidth, cardHeight, 2, 2, 'F');
   doc.setFontSize(8); doc.text('EXPENSES', margin + cardWidth + gap + 4, cardY + 7);
-  doc.setFontSize(11); doc.text(`Rs. ${monthlyData.totalExpenses.toLocaleString()}`, margin + cardWidth + gap + 4, cardY + 16);
+  // ✅ CHANGED HERE
+  doc.setFontSize(11); doc.text(`Rs. ${formatIndianCurrency(monthlyData.totalExpenses)}`, margin + cardWidth + gap + 4, cardY + 16);
 
   // Target
   doc.setFillColor(59, 130, 246);
   doc.roundedRect(margin + (cardWidth + gap) * 2, cardY, cardWidth, cardHeight, 2, 2, 'F');
   doc.setFontSize(8); doc.text('TARGET SPLIT', margin + (cardWidth + gap) * 2 + 4, cardY + 7);
-  doc.setFontSize(11); doc.text(`Rs. ${monthlyData.split.toLocaleString()}`, margin + (cardWidth + gap) * 2 + 4, cardY + 16);
+  // ✅ CHANGED HERE
+  doc.setFontSize(11); doc.text(`Rs. ${formatIndianCurrency(monthlyData.split)}`, margin + (cardWidth + gap) * 2 + 4, cardY + 16);
 
   let currentY = cardY + cardHeight + 15;
   const tableStyles = { fontSize: 9, cellPadding: 4, fontStyle: 'bold' as const }; 
@@ -55,7 +64,13 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
       doc.setFontSize(11);
       doc.setTextColor(30, 41, 59);
       doc.text('Settlement Plan', 14, currentY);
-      const transactionBody = monthlyData.transactions.map((t: any) => [t.from, 'pays', t.to, `Rs. ${t.amount.toLocaleString()}`]);
+      // ✅ CHANGED HERE (Inside map)
+      const transactionBody = monthlyData.transactions.map((t: any) => [
+          t.from, 
+          'pays', 
+          t.to, 
+          `Rs. ${formatIndianCurrency(t.amount)}`
+      ]);
       
       autoTable(doc, {
           startY: currentY + 4,
@@ -74,9 +89,11 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
     const isPaid = rec?.status === 'Paid';
     return [
       shop.name, 
-      `Rs. ${shop.baseRent.toLocaleString()}`, 
+      // ✅ CHANGED HERE
+      `Rs. ${formatIndianCurrency(shop.baseRent)}`, 
       isPaid ? `Paid (${rec.collectedBy})` : 'Unpaid', 
-      `Rs. ${(rec?.amountPaid || 0).toLocaleString()}`
+      // ✅ CHANGED HERE
+      `Rs. ${formatIndianCurrency(rec?.amountPaid || 0)}`
     ];
   });
 
@@ -92,13 +109,12 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
     headStyles: { ...headStyles, fillColor: [71, 85, 105] as [number, number, number] },
     styles: tableStyles,
     didParseCell: (data) => {
-      // Column index 2 is "Status"
       if (data.section === 'body' && data.column.index === 2) {
         const text = data.cell.text[0] || '';
         if (text.startsWith('Paid')) {
-          data.cell.styles.textColor = [34, 197, 94]; // Green [34, 197, 94]
+          data.cell.styles.textColor = [34, 197, 94]; 
         } else if (text === 'Unpaid') {
-          data.cell.styles.textColor = [239, 68, 68]; // Red [239, 68, 68]
+          data.cell.styles.textColor = [239, 68, 68]; 
         }
       }
     }
@@ -115,7 +131,8 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
       exp.description,
       exp.paidBy,
       new Date(exp.timestamp).toLocaleDateString(),
-      `Rs. ${exp.amount.toLocaleString()}`
+      // ✅ CHANGED HERE
+      `Rs. ${formatIndianCurrency(exp.amount)}`
     ]);
 
     autoTable(doc, {
@@ -128,5 +145,9 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
     });
   }
 
-  doc.save(`Rent_Report_${currentMonth}.pdf`);
+  if (returnBlob) {
+    return doc.output('blob'); 
+  } else {
+    doc.save(`Rent_Report_${currentMonth}.pdf`); 
+  }
 };
