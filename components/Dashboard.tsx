@@ -1,27 +1,8 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Building2, 
-  Receipt, 
-  Wallet, 
-  Users, 
-  Download, 
-  Plus, 
-  Trash2, 
-  CheckCircle2, 
-  ChevronLeft, 
-  ChevronRight,
-  TrendingUp,
-  CreditCard,
-  Loader2,
-  IndianRupee,
-  ArrowRightLeft,
-  UserCircle,
-  Save,
-  AlertCircle,
-  Pencil,
-  X,
-  LogOut
+  Building2, Receipt, Wallet, Users, Download, Plus, Trash2, 
+  CheckCircle2, ChevronLeft, ChevronRight, TrendingUp, CreditCard, 
+  Loader2, ArrowRightLeft, UserCircle, Save, AlertCircle, Pencil, X, LogOut, Check
 } from 'lucide-react';
 import { api } from '../services/api';
 import { generatePDF } from '../services/pdf';
@@ -52,8 +33,15 @@ const Dashboard = ({ user, onLogout }) => {
   const [newExpensePayer, setNewExpensePayer] = useState('Shared');
   
   const [loading, setLoading] = useState(true);
+  
+  // Loading states
+  const [submitting, setSubmitting] = useState(false); 
+  const [processingId, setProcessingId] = useState(null); 
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [pdfSuccess, setPdfSuccess] = useState(false);
 
-  const refreshData = async () => {
+  const refreshData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await api.fetchMonthData(currentMonth);
       setShops(data.shops || []);
@@ -67,8 +55,7 @@ const Dashboard = ({ user, onLogout }) => {
   };
 
   useEffect(() => {
-    setLoading(true);
-    refreshData();
+    refreshData(false);
   }, [currentMonth]);
 
   const monthlyData = useMemo(() => {
@@ -126,41 +113,73 @@ const Dashboard = ({ user, onLogout }) => {
     return { received, totalExpenses, net, split, settlements, transactions };
   }, [records, expenses]);
 
-  const generateId = () => Math.random().toString(36).substr(2, 9);
+  const handleDownloadPDF = async () => {
+    setDownloadingPdf(true);
+    setPdfSuccess(false);
+    try {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        generatePDF(shops, records, expenses, currentMonth, monthlyData);
+        setPdfSuccess(true);
+        setTimeout(() => setPdfSuccess(false), 3000);
+    } catch (error) {
+        console.error("PDF Error", error);
+        alert("Failed to generate PDF");
+    } finally {
+        setDownloadingPdf(false);
+    }
+  };
 
   const handleSeedShops = async () => {
-    setLoading(true);
+    setSubmitting(true);
     for (const shopData of DEFAULT_SHOPS_DATA) {
-      const shop = { id: generateId(), name: shopData.name, baseRent: shopData.baseRent };
+      const shop = { name: shopData.name, baseRent: shopData.baseRent };
       await api.addShop(currentMonth, shop);
     }
-    await refreshData();
+    await refreshData(true);
+    setSubmitting(false);
   };
 
   const handleSaveShop = async () => {
     if (!newShopName || !newShopRent) return;
-    if (editingShopId) {
-      await api.updateShop(currentMonth, editingShopId, { name: newShopName, baseRent: Number(newShopRent) });
-      setEditingShopId(null);
-    } else {
-      const shop = { id: generateId(), name: newShopName, baseRent: Number(newShopRent) };
-      await api.addShop(currentMonth, shop);
+    setSubmitting(true);
+    try {
+        if (editingShopId) {
+            await api.updateShop(currentMonth, editingShopId, { name: newShopName, baseRent: Number(newShopRent) });
+            setEditingShopId(null);
+        } else {
+            const shop = { name: newShopName, baseRent: Number(newShopRent) };
+            await api.addShop(currentMonth, shop);
+        }
+        
+        setNewShopName('');
+        setNewShopRent('');
+        await refreshData(true);
+    } catch (err) {
+        console.error("Error saving shop:", err);
+        alert("Failed to save shop.");
+    } finally {
+        setSubmitting(false);
     }
-    setNewShopName('');
-    setNewShopRent('');
-    refreshData();
   };
 
   const deleteShop = async (id: string) => {
-    if(window.confirm("Delete shop?")) {
-      await api.deleteShop(currentMonth, id);
-      refreshData();
-    }
+    // 1) REMOVED ALERT: Directly delete without confirmation window
+    setProcessingId(id);
+    await api.deleteShop(currentMonth, id);
+    await refreshData(true);
+    setProcessingId(null);
   };
 
   const toggleRentStatus = async (shopId: string, baseRent: number) => {
-    const res = await api.toggleRent(currentMonth, shopId, baseRent, MEMBERS[0]);
-    setRecords(res.rentRecords);
+    setProcessingId(shopId);
+    try {
+        const res = await api.toggleRent(currentMonth, shopId, baseRent, MEMBERS[0]);
+        setRecords(res.rentRecords);
+    } catch(err) {
+        console.error("Toggle rent failed", err);
+    } finally {
+        setProcessingId(null);
+    }
   };
 
   const updateCollectedBy = async (shopId: string, newCollector: string) => {
@@ -174,22 +193,30 @@ const Dashboard = ({ user, onLogout }) => {
 
   const addExpense = async () => {
     if (!newExpenseDesc || !newExpenseAmount) return;
-    const expense = {
-      id: generateId(),
-      description: newExpenseDesc,
-      amount: Number(newExpenseAmount),
-      paidBy: newExpensePayer,
-      timestamp: new Date().toISOString()
-    };
-    await api.addExpense(currentMonth, expense);
-    setNewExpenseDesc('');
-    setNewExpenseAmount('');
-    refreshData();
+    setSubmitting(true);
+    try {
+        const expense = {
+          description: newExpenseDesc,
+          amount: Number(newExpenseAmount),
+          paidBy: newExpensePayer
+        };
+        await api.addExpense(currentMonth, expense);
+        setNewExpenseDesc('');
+        setNewExpenseAmount('');
+        await refreshData(true);
+    } catch (err) {
+        console.error("Error adding expense:", err);
+        alert("Failed to add expense.");
+    } finally {
+        setSubmitting(false);
+    }
   };
 
   const deleteExpense = async (id: string) => {
+    setProcessingId(id);
     await api.deleteExpense(currentMonth, id);
-    refreshData();
+    await refreshData(true);
+    setProcessingId(null);
   };
 
   const changeMonth = (delta: number) => {
@@ -206,7 +233,20 @@ const Dashboard = ({ user, onLogout }) => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 text-slate-800 font-sans pb-12">
+    <div className="min-h-screen bg-gray-50 text-slate-800 font-sans pb-12 relative">
+        
+      {/* 3) CENTERED SUCCESS MESSAGE OVERLAY */}
+      {pdfSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="bg-white px-8 py-6 rounded-3xl shadow-2xl border border-emerald-100 flex flex-col items-center gap-3 animate-in fade-in zoom-in duration-300 pointer-events-auto">
+            <div className="bg-emerald-100 p-4 rounded-full text-emerald-600 shadow-sm">
+               <CheckCircle2 size={40} strokeWidth={3} />
+            </div>
+            <span className="text-emerald-800 font-bold text-xl tracking-tight">Successfully downloaded!</span>
+          </div>
+        </div>
+      )}
+
       <header className="bg-white border-b sticky top-0 z-20 shadow-sm backdrop-blur-md bg-white/80">
         <div className="max-w-7xl mx-auto px-4 py-3 sm:h-20 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-start">
@@ -235,18 +275,20 @@ const Dashboard = ({ user, onLogout }) => {
               </button>
             </div>
             
-            {/* PDF Export moved to header */}
+            {/* 2) BIGGER PDF BUTTON */}
             <button 
-              onClick={() => generatePDF(shops, records, expenses, currentMonth, monthlyData)}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all shadow-md text-xs active:scale-95 whitespace-nowrap"
+              onClick={handleDownloadPDF}
+              disabled={downloadingPdf}
+              className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all shadow-md text-sm active:scale-95 whitespace-nowrap disabled:opacity-70 disabled:cursor-wait"
               title="Export PDF Report"
             >
-              <Download size={16} /> <span className="hidden sm:inline">Export PDF</span>
+              {downloadingPdf ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} 
+              <span className="hidden sm:inline">{downloadingPdf ? "Generating..." : "Export PDF"}</span>
             </button>
 
             <button 
               onClick={onLogout}
-              className="p-2.5 bg-slate-100 text-slate-500 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100"
+              className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100"
               title="Logout"
             >
               <LogOut size={20} />
@@ -269,8 +311,8 @@ const Dashboard = ({ user, onLogout }) => {
               <section className="bg-indigo-900 rounded-3xl shadow-xl p-6 text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-10"><ArrowRightLeft size={120} /></div>
                 <div className="relative z-10">
-                   <h2 className="text-lg font-bold flex items-center gap-2 mb-4"><ArrowRightLeft className="text-indigo-300" />Settlement Plan</h2>
-                   <div className="grid gap-3">
+                    <h2 className="text-lg font-bold flex items-center gap-2 mb-4"><ArrowRightLeft className="text-indigo-300" />Settlement Plan</h2>
+                    <div className="grid gap-3">
                       {monthlyData.transactions.map((t: any, idx) => (
                         <div key={idx} className="bg-white/10 backdrop-blur-md rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between border border-white/5 gap-3">
                             <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -281,7 +323,7 @@ const Dashboard = ({ user, onLogout }) => {
                             <div className="font-bold text-lg font-mono">₹{t.amount.toLocaleString()}</div>
                         </div>
                       ))}
-                   </div>
+                    </div>
                 </div>
               </section>
             )}
@@ -292,9 +334,10 @@ const Dashboard = ({ user, onLogout }) => {
                 {shops.length === 0 && (
                   <button 
                     onClick={handleSeedShops}
-                    className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100"
+                    disabled={submitting}
+                    className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 disabled:opacity-50"
                   >
-                    <Plus size={14} /> Load Default Shops
+                    {submitting ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14} />} Load Default Shops
                   </button>
                 )}
               </div>
@@ -312,21 +355,27 @@ const Dashboard = ({ user, onLogout }) => {
                     {shops.map((shop: any) => {
                       const record: any = records.find((r: any) => r.shopId === shop.id);
                       const isPaid = record?.status === 'Paid';
+                      const isProcessing = processingId === shop.id;
+
                       return (
                         <tr key={shop.id} className="hover:bg-slate-50/30 transition-colors group">
-                          {/* Strict white background for Shop Name and Rent columns */}
                           <td className="px-6 py-4 bg-white border-r border-slate-50"><span className="font-bold text-slate-700 block text-sm">{shop.name}</span></td>
-                          <td className="px-4 py-4 bg-white border-r border-slate-50"><div className="font-bold text-indigo-700 font-mono bg-white w-fit px-2 py-1 rounded text-xs border border-indigo-100">₹{shop.baseRent.toLocaleString()}</div></td>
+                          <td className="px-4 py-4 bg-white border-r border-slate-50"><div className="font-bold text-indigo-700 font-mono bg-white w-fit px-2 py-1 rounded text-xs border border-indigo-100">₹{shop.baseRent?.toLocaleString() || 0}</div></td>
                           <td className="px-4 py-4">
                             <div className="flex flex-col gap-2 max-w-[180px] mx-auto">
                               <button 
                                   onClick={() => toggleRentStatus(shop.id, shop.baseRent)}
+                                  disabled={isProcessing}
                                   className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all border w-full justify-center ${
-                                      isPaid ? 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm' : 'bg-white text-slate-400 border-slate-200'
+                                    isPaid ? 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm' : 'bg-white text-slate-400 border-slate-200'
                                   }`}
                               >
-                                  {isPaid ? <CheckCircle2 size={12} /> : <div className="w-3 h-3 rounded-full border-2 border-slate-200"></div>}
-                                  {isPaid ? `PAID` : 'MARK PAID'}
+                                  {isProcessing ? <Loader2 size={12} className="animate-spin text-slate-400"/> : (
+                                    <>
+                                      {isPaid ? <CheckCircle2 size={12} /> : <div className="w-3 h-3 rounded-full border-2 border-slate-200"></div>}
+                                      {isPaid ? `PAID` : 'MARK PAID'}
+                                    </>
+                                  )}
                               </button>
                               
                               {isPaid && (
@@ -343,7 +392,9 @@ const Dashboard = ({ user, onLogout }) => {
                           <td className="px-4 py-4 text-right">
                             <div className="flex justify-end gap-2">
                                 <button onClick={() => { setEditingShopId(shop.id); setNewShopName(shop.name); setNewShopRent(shop.baseRent.toString()); }} className="text-slate-300 hover:text-indigo-500 p-2"><Pencil size={16} /></button>
-                                <button onClick={() => deleteShop(shop.id)} className="text-slate-300 hover:text-rose-500 p-2"><Trash2 size={16} /></button>
+                                <button onClick={() => deleteShop(shop.id)} className="text-slate-300 hover:text-rose-500 p-2" disabled={isProcessing}>
+                                    {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                </button>
                             </div>
                           </td>
                         </tr>
@@ -356,8 +407,9 @@ const Dashboard = ({ user, onLogout }) => {
                 <div className="flex flex-col sm:flex-row gap-3 items-center">
                   <input type="text" placeholder="Shop Name" className="flex-grow p-3 rounded-xl ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm shadow-sm" value={newShopName} onChange={(e) => setNewShopName(e.target.value)} />
                   <input type="number" placeholder="Rent" className="w-full sm:w-32 p-3 rounded-xl ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm shadow-sm" value={newShopRent} onChange={(e) => setNewShopRent(e.target.value)} />
-                  <button onClick={handleSaveShop} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-slate-200">
-                    {editingShopId ? <Save size={16} /> : <Plus size={16} />} {editingShopId ? 'Update' : 'Add'}
+                  <button onClick={handleSaveShop} disabled={submitting} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-slate-200 disabled:opacity-70 disabled:cursor-not-allowed">
+                    {submitting ? <Loader2 size={16} className="animate-spin" /> : (editingShopId ? <Save size={16} /> : <Plus size={16} />)} 
+                    {editingShopId ? 'Update' : 'Add'}
                   </button>
                   {editingShopId && <button onClick={() => { setEditingShopId(null); setNewShopName(''); setNewShopRent(''); }} className="p-3 bg-slate-200 rounded-xl"><X size={16}/></button>}
                 </div>
@@ -388,7 +440,9 @@ const Dashboard = ({ user, onLogout }) => {
                   </select>
                 </div>
                 <div className="sm:col-span-4 mt-2">
-                  <button onClick={addExpense} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-lg"><Plus size={16} />Record Expense</button>
+                  <button onClick={addExpense} disabled={submitting} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-lg disabled:opacity-70 disabled:cursor-not-allowed">
+                      {submitting ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Record Expense
+                  </button>
                 </div>
               </div>
             </section>
@@ -413,7 +467,9 @@ const Dashboard = ({ user, onLogout }) => {
                       </div>
                       <div className="flex items-center gap-4">
                         <span className="font-bold text-rose-600 text-lg font-mono">-₹{exp.amount.toLocaleString()}</span>
-                        <button onClick={() => deleteExpense(exp.id)} className="text-slate-300 hover:text-rose-500 p-2"><Trash2 size={16} /></button>
+                        <button onClick={() => deleteExpense(exp.id)} disabled={processingId === exp.id} className="text-slate-300 hover:text-rose-500 p-2">
+                            {processingId === exp.id ? <Loader2 size={16} className="animate-spin text-rose-500" /> : <Trash2 size={16} />}
+                        </button>
                       </div>
                     </div>
                   ))

@@ -1,16 +1,20 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# ✅ CRITICAL: Security (Protects your Supabase Keys)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
+# ✅ CRITICAL: Dependencies (Heavy files, never upload these)
 node_modules
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# ✅ CRITICAL: Build output (Generated files)
 dist
 dist-ssr
-*.local
+coverage
 
 # Editor directories and files
 .vscode/*
@@ -18,7 +22,10 @@ dist-ssr
 .idea
 .DS_Store
 *.suo
-*.ntvs*
+*.ntvs
 *.njsproj
 *.sln
 *.sw?
+
+# Vercel (If you use Vercel CLI)
+.vercel

@@ -1,191 +1,157 @@
-
-/**
- * MOCK API SERVICE
- * Simulates a Node.js/Express backend using localStorage.
- */
-
-const STORAGE_KEYS = {
-  USERS: 'rms_mock_users',
-  MONTHLY_DATA: 'rms_mock_monthly_data'
-};
-
-const delay = (ms = 500) => new Promise(resolve => setTimeout(resolve, ms));
-const getDb = (key: string) => JSON.parse(localStorage.getItem(key) || '[]');
-const saveDb = (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data));
+import { supabase } from './supabase';
 
 export const api = {
+  // --- AUTHENTICATION ---
   login: async (email, password) => {
-    await delay();
-    const users = getDb(STORAGE_KEYS.USERS);
-    const user = users.find(u => u.email === email);
-    if (!user || user.password !== password) {
-      throw new Error('Invalid email or password');
-    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    if (!data.user) throw new Error("Login failed");
+
     return { 
-      token: `mock-jwt-${user.id}`, 
-      user: { id: user.id, name: user.name, familyId: user.familyId } 
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        familyId: data.user.user_metadata.familyId,
+        name: data.user.user_metadata.name
+      }, 
+      token: data.session.access_token 
     };
   },
 
-  register: async (userData) => {
-    await delay();
-    const users = getDb(STORAGE_KEYS.USERS);
-    if (users.find(u => u.email === userData.email)) {
-      throw new Error('Email already registered');
-    }
-    const newUser = {
-      ...userData,
-      id: Math.random().toString(36).substr(2, 9),
-      familyId: userData.familyId.toUpperCase(),
-      createdAt: new Date().toISOString()
-    };
-    users.push(newUser);
-    saveDb(STORAGE_KEYS.USERS, users);
-    return { message: 'Registration successful' };
-  },
-
-  fetchMonthData: async (month) => {
-    await delay(300);
-    const auth = JSON.parse(localStorage.getItem('rentManager_auth') || '{}');
-    const familyId = auth.user?.familyId;
-    if (!familyId) throw new Error('Unauthorized');
-
-    const allData = getDb(STORAGE_KEYS.MONTHLY_DATA);
-    let data = allData.find(d => d.familyId === familyId && d.month === month);
-
-    if (!data) {
-      const prevData = allData
-        .filter(d => d.familyId === familyId)
-        .sort((a, b) => b.month.localeCompare(a.month))[0];
-
-      data = {
-        familyId,
-        month,
-        shops: prevData ? prevData.shops : [],
-        rentRecords: [],
-        expenses: [],
-        updatedAt: new Date().toISOString()
-      };
-      allData.push(data);
-      saveDb(STORAGE_KEYS.MONTHLY_DATA, allData);
-    }
+  register: async ({ email, password, name, familyId }) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name, familyId: familyId.toUpperCase() } }
+    });
+    if (error) throw error;
     return data;
   },
 
+  // --- DATA FETCHING (SPEED OPTIMIZED) ---
+  fetchMonthData: async (month) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not found");
+    const familyId = user.user_metadata.familyId;
+
+    // PERFORMANCE FIX: Fetch all 3 tables in PARALLEL (At the same time)
+    const [shopsRes, rentsRes, expensesRes] = await Promise.all([
+      supabase.from('shops').select('*').eq('family_id', familyId).eq('month', month),
+      supabase.from('rent_records').select('*').eq('family_id', familyId).eq('month', month),
+      supabase.from('expenses').select('*').eq('family_id', familyId).eq('month', month)
+    ]);
+
+    // Check errors
+    if (shopsRes.error) console.error("Error shops:", shopsRes.error);
+    if (rentsRes.error) console.error("Error rents:", rentsRes.error);
+    if (expensesRes.error) console.error("Error expenses:", expensesRes.error);
+
+    return {
+      // Logic unchanged: Map DB snake_case to Frontend camelCase
+      shops: shopsRes.data?.map(s => ({ ...s, baseRent: s.base_rent })) || [],
+      
+      rentRecords: rentsRes.data?.map(r => ({
+        ...r, 
+        shopId: r.shop_id, 
+        amountPaid: r.amount_paid, 
+        collectedBy: r.collected_by 
+      })) || [], 
+      
+      expenses: expensesRes.data?.map(e => ({ ...e, paidBy: e.paid_by })) || []
+    };
+  },
+
+  // --- ADD / EDIT DATA ---
   addShop: async (month, shop) => {
-    await delay(200);
-    const auth = JSON.parse(localStorage.getItem('rentManager_auth') || '{}');
-    const familyId = auth.user?.familyId;
-    const allData = getDb(STORAGE_KEYS.MONTHLY_DATA);
-    const index = allData.findIndex(d => d.familyId === familyId && d.month === month);
-    if (index > -1) {
-      allData[index].shops.push(shop);
-      allData[index].updatedAt = new Date().toISOString();
-      saveDb(STORAGE_KEYS.MONTHLY_DATA, allData);
-    }
-    return { message: 'Shop added' };
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('shops').insert({
+      month,
+      family_id: user?.user_metadata.familyId,
+      name: shop.name,
+      base_rent: shop.baseRent
+    });
   },
 
   updateShop: async (month, shopId, update) => {
-    await delay(200);
-    const auth = JSON.parse(localStorage.getItem('rentManager_auth') || '{}');
-    const familyId = auth.user?.familyId;
-    const allData = getDb(STORAGE_KEYS.MONTHLY_DATA);
-    const data = allData.find(d => d.familyId === familyId && d.month === month);
-    if (data) {
-      const shop = data.shops.find(s => s.id === shopId);
-      if (shop) {
-        Object.assign(shop, update);
-        data.updatedAt = new Date().toISOString();
-        saveDb(STORAGE_KEYS.MONTHLY_DATA, allData);
-      }
+    const dbUpdate: any = {};
+    if (update.name) dbUpdate.name = update.name;
+    if (update.baseRent) dbUpdate.base_rent = update.baseRent;
+
+    // 1. Update Shop
+    const { error } = await supabase.from('shops').update(dbUpdate).eq('id', shopId);
+    if (error) throw error;
+
+    // 2. Logic Sync: Update rent record if base rent changed
+    if (update.baseRent) {
+        await supabase
+            .from('rent_records')
+            .update({ amount_paid: update.baseRent })
+            .eq('shop_id', shopId)
+            .eq('month', month);
     }
-    return { message: 'Shop updated' };
   },
 
   deleteShop: async (month, shopId) => {
-    await delay(200);
-    const auth = JSON.parse(localStorage.getItem('rentManager_auth') || '{}');
-    const familyId = auth.user?.familyId;
-    const allData = getDb(STORAGE_KEYS.MONTHLY_DATA);
-    const data = allData.find(d => d.familyId === familyId && d.month === month);
-    if (data) {
-      data.shops = data.shops.filter(s => s.id !== shopId);
-      data.updatedAt = new Date().toISOString();
-      saveDb(STORAGE_KEYS.MONTHLY_DATA, allData);
-    }
-    return { message: 'Shop deleted' };
+    await supabase.from('shops').delete().eq('id', shopId);
   },
 
+  // --- TOGGLE RENT ---
   toggleRent: async (month, shopId, baseRent, member) => {
-    await delay(200);
-    const auth = JSON.parse(localStorage.getItem('rentManager_auth') || '{}');
-    const familyId = auth.user?.familyId;
-    const allData = getDb(STORAGE_KEYS.MONTHLY_DATA);
-    const data = allData.find(d => d.familyId === familyId && d.month === month);
-    if (data) {
-      const existingIndex = data.rentRecords.findIndex(r => r.shopId === shopId);
-      if (existingIndex > -1) {
-        data.rentRecords.splice(existingIndex, 1);
-      } else {
-        data.rentRecords.push({
-          shopId,
-          status: 'Paid',
-          amountPaid: baseRent,
-          collectedBy: member,
-          timestamp: new Date().toISOString()
+    const { data: { user } } = await supabase.auth.getUser();
+    const familyId = user?.user_metadata.familyId;
+
+    const { data: existing } = await supabase
+        .from('rent_records')
+        .select('*')
+        .eq('shop_id', shopId)
+        .eq('month', month)
+        .maybeSingle(); 
+
+    if (existing) {
+        await supabase.from('rent_records').delete().eq('id', existing.id);
+    } else {
+        await supabase.from('rent_records').insert({
+            shop_id: shopId,
+            month,
+            family_id: familyId,
+            status: 'Paid',
+            amount_paid: baseRent,
+            collected_by: member
         });
-      }
-      data.updatedAt = new Date().toISOString();
-      saveDb(STORAGE_KEYS.MONTHLY_DATA, allData);
-      return data;
     }
-    throw new Error('Data not found');
+
+    return api.fetchMonthData(month);
   },
 
+  // --- UPDATE RENT RECORD ---
   updateRentRecord: async (month, shopId, update) => {
-    await delay(200);
-    const auth = JSON.parse(localStorage.getItem('rentManager_auth') || '{}');
-    const familyId = auth.user?.familyId;
-    const allData = getDb(STORAGE_KEYS.MONTHLY_DATA);
-    const data = allData.find(d => d.familyId === familyId && d.month === month);
-    if (data) {
-      const record = data.rentRecords.find(r => r.shopId === shopId);
-      if (record) {
-        Object.assign(record, update);
-        data.updatedAt = new Date().toISOString();
-        saveDb(STORAGE_KEYS.MONTHLY_DATA, allData);
-      }
-      return data;
-    }
-    throw new Error('Data not found');
+    const dbUpdate: any = {};
+    if (update.collectedBy) dbUpdate.collected_by = update.collectedBy;
+    if (update.amountPaid) dbUpdate.amount_paid = update.amountPaid;
+
+    const { error } = await supabase
+      .from('rent_records')
+      .update(dbUpdate)
+      .eq('shop_id', shopId)
+      .eq('month', month);
+
+    if (error) throw error;
+
+    return api.fetchMonthData(month);
   },
 
   addExpense: async (month, expense) => {
-    await delay(200);
-    const auth = JSON.parse(localStorage.getItem('rentManager_auth') || '{}');
-    const familyId = auth.user?.familyId;
-    const allData = getDb(STORAGE_KEYS.MONTHLY_DATA);
-    const data = allData.find(d => d.familyId === familyId && d.month === month);
-    if (data) {
-      data.expenses.push(expense);
-      data.updatedAt = new Date().toISOString();
-      saveDb(STORAGE_KEYS.MONTHLY_DATA, allData);
-    }
-    return { message: 'Expense added' };
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('expenses').insert({
+      month,
+      family_id: user?.user_metadata.familyId,
+      description: expense.description,
+      amount: expense.amount,
+      paid_by: expense.paidBy
+    });
   },
 
   deleteExpense: async (month, expId) => {
-    await delay(200);
-    const auth = JSON.parse(localStorage.getItem('rentManager_auth') || '{}');
-    const familyId = auth.user?.familyId;
-    const allData = getDb(STORAGE_KEYS.MONTHLY_DATA);
-    const data = allData.find(d => d.familyId === familyId && d.month === month);
-    if (data) {
-      data.expenses = data.expenses.filter(e => e.id !== expId);
-      data.updatedAt = new Date().toISOString();
-      saveDb(STORAGE_KEYS.MONTHLY_DATA, allData);
-    }
-    return { message: 'Expense deleted' };
+    await supabase.from('expenses').delete().eq('id', expId);
   }
 };
