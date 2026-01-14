@@ -330,7 +330,7 @@ const Dashboard = ({ user, onLogout }) => {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <StatCard title="Received" value={monthlyData.received} type="success" icon={TrendingUp} />
           <StatCard title="Expenses" value={monthlyData.totalExpenses} type="danger" icon={Receipt} />
-          <StatCard title="Net Profit" value={monthlyData.net} type="primary" icon={Wallet} />
+          <StatCard title="Balance" value={monthlyData.net} type="primary" icon={Wallet} />
           <StatCard title="Share (1/3)" value={monthlyData.split} type="warning" icon={Users} />
         </div>
 
