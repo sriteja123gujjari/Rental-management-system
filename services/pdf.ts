@@ -149,6 +149,6 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
   if (returnBlob) {
     return doc.output('blob'); 
   } else {
-    doc.save(`Rent_Report_${currentMonth}.pdf`); 
+     doc.save(`${PDF_FILE_PREFIX}_${currentMonth}.pdf`); 
   }
 };
