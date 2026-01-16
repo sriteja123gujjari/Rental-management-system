@@ -153,5 +153,11 @@ export const api = {
 
   deleteExpense: async (month, expId) => {
     await supabase.from('expenses').delete().eq('id', expId);
+  },
+
+  fetchArreas: async (month)=>{
+    const monthData = await api.fetchMonthData(month);
+    console.log('Month',monthData);
+    
   }
 };
