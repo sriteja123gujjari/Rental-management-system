@@ -406,7 +406,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                   {shops.length === 0 && ( <button onClick={handleSeedShops} disabled={submitting} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 disabled:opacity-50"> {submitting ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14} />} Load Default Shops </button> )} 
                </div>
                
-               {/* 1. MOBILE VIEW (CARDS) */}
+               {/* 1. MOBILE VIEW (CARDS) - FIXED "PAID TO" VISIBILITY */}
                <div className="md:hidden p-4 space-y-4">
                  {shops.map((shop) => {
                    const record = records.find((r) => r.shop_id === shop.id); 
@@ -416,51 +416,69 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                    // CALCULATION LOGIC:
                    const totalObligation = shop.base_rent + pastDue; 
                    const paidAmount = record?.amount_paid || 0;
-                   // Outstanding Balance = What they supposed to pay - what they paid
                    const outstandingBalance = totalObligation - paidAmount;
 
                    return (
-                     <div key={shop.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-4 relative">
+                     <div key={shop.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-4 relative">
+                         {/* HEADER: Name & Rent */}
                          <div className="flex justify-between items-start">
                            <div>
-                              <h3 className="font-bold text-slate-800 text-lg">{shop.name}</h3>
-                              <p className="text-xs text-slate-400 font-mono mt-1">Rent: ₹{formatCurrency(shop.base_rent)}</p>
+                              <h3 className="font-bold text-slate-900 text-lg">{shop.name}</h3>
+                              <p className="text-sm text-slate-400 font-mono mt-0.5">Rent: ₹{formatCurrency(shop.base_rent)}</p>
                            </div>
-                           <div className="flex gap-1">
-                              <button onClick={() => { setEditingShopId(shop.id); setNewShopName(shop.name); setNewShopRent(shop.base_rent.toString()); }} className="p-2 bg-slate-50 text-slate-400 rounded-lg"><Pencil size={14}/></button>
-                              <button onClick={() => deleteShop(shop.id)} className="p-2 bg-rose-50 text-rose-400 rounded-lg"><Trash2 size={14}/></button>
-                           </div>
-                         </div>
-                         <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl">
-                           <div>
-                              <span className="text-[10px] uppercase text-slate-400 font-bold">Arrears</span>
-                              <div className="text-rose-500 font-bold text-sm">{pastDue > 0 ? `+ ₹${formatCurrency(pastDue)}` : '-'}</div>
-                           </div>
-                           <div>
-                              <span className="text-[10px] uppercase text-indigo-400 font-bold">Paid</span>
-                              <div className="text-emerald-600 font-bold text-sm">₹{formatCurrency(paidAmount)}</div>
-                           </div>
-                           <div className="col-span-2 pt-2 border-t border-slate-200 mt-1 flex justify-between items-center">
-                              <span className="text-[10px] uppercase text-slate-500 font-bold">Remaining Due</span>
-                              <span className={`font-black text-lg font-mono ${outstandingBalance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                ₹{formatCurrency(outstandingBalance)}
-                              </span>
+                           <div className="flex gap-2">
+                              <button onClick={() => { setEditingShopId(shop.id); setNewShopName(shop.name); setNewShopRent(shop.base_rent.toString()); }} className="p-2 bg-slate-50 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors"><Pencil size={16}/></button>
+                              <button onClick={() => deleteShop(shop.id)} className="p-2 bg-rose-50 text-rose-400 hover:text-rose-600 rounded-lg transition-colors"><Trash2 size={16}/></button>
                            </div>
                          </div>
+
+                         {/* STATS BLOCK (Gray Background) */}
+                         <div className="bg-slate-50/80 p-4 rounded-xl space-y-4">
+                           
+                           {/* Row 1: ARREARS (Left) --- DUE (Right) */}
+                           <div className="flex justify-between items-center border-b border-slate-200 pb-4">
+                              <div className="flex flex-col">
+                                <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">ARREARS</span>
+                                <span className="text-rose-500 font-bold text-sm mt-1">{pastDue > 0 ? `+ ₹${formatCurrency(pastDue)}` : '-'}</span>
+                              </div>
+                              <div className="flex flex-col items-end">
+                                <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">DUE</span>
+                                <span className={`font-bold text-lg ${outstandingBalance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                  ₹{formatCurrency(outstandingBalance)}
+                                </span>
+                              </div>
+                           </div>
+
+                           {/* Row 2: PAID LABEL (Left) --- PAID AMOUNT (Right) */}
+                           <div className="flex justify-between items-center">
+                              <span className="text-[10px] uppercase text-emerald-600 font-bold tracking-wider">PAID</span>
+                              <span className="text-emerald-700 font-bold text-lg">₹{formatCurrency(paidAmount)}</span>
+                           </div>
+
+                         </div>
+
+                         {/* FOOTER ACTION BUTTON */}
                          <div>
-                           {!isPaid || outstandingBalance > 0 ? (
-                              <button onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 flex items-center justify-center gap-2 active:scale-95 transition-transform"> <CreditCard size={16}/> {isPaid ? 'Update Payment' : 'Record Payment'} </button>
+                           {/* LOGIC CHANGE: If NOT paid, show Record Button. If Paid (Partial or Full), show Green Box. */}
+                           {!isPaid ? (
+                              <button 
+                                onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} 
+                                className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-black"
+                              > 
+                                <CreditCard size={18}/> 
+                                Record Payment 
+                              </button>
                            ) : (
                               <div className="flex items-center gap-2">
-                                 <div className="flex-grow bg-emerald-50 border border-emerald-100 p-2 rounded-xl flex items-center justify-between px-4">
+                                 <div className="flex-grow bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-center justify-between px-4">
                                     <div className="flex flex-col">
-                                       <span className="text-[9px] font-bold text-emerald-600 uppercase">Paid</span>
-                                       <span className="text-[10px] text-slate-400">to {record?.collected_by}</span>
+                                       <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">PAID</span>
+                                       <span className="text-[11px] text-slate-400">to {record?.collected_by}</span>
                                     </div>
-                                    <div className="text-emerald-700 font-black font-mono text-lg">₹{formatCurrency(record.amount_paid)}</div>
+                                    <div className="text-emerald-700 font-black font-mono text-xl">₹{formatCurrency(record.amount_paid)}</div>
                                  </div>
-                                 <button onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} className="h-full px-3 bg-white border border-slate-200 rounded-xl text-slate-400"><Pencil size={16}/></button>
-                                 <button onClick={() => clearPayment(shop.id)} className="h-full px-3 bg-white border border-rose-100 text-rose-400 rounded-xl"><X size={16}/></button>
+                                 <button onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} className="h-full px-4 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-indigo-500 hover:border-indigo-100 transition-all"><Pencil size={18}/></button>
+                                 <button onClick={() => clearPayment(shop.id)} className="h-full px-4 bg-white border border-rose-100 text-rose-400 hover:text-rose-600 hover:border-rose-200 transition-all"><X size={18}/></button>
                               </div>
                            )}
                          </div>
