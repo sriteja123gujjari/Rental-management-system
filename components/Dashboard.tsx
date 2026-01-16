@@ -12,7 +12,7 @@ interface Shop { id: string; name: string; base_rent: number; }
 interface RentRecord { shop_id: string; amount_paid: number; collected_by: string; status: string; }
 interface Expense { id: string; description: string; amount: number; paid_by: string; }
 
-const MEMBERS = ['Anjaneyulu', 'Srinivas', 'Goutham'];
+const MEMBERS = ['Srinivas','Anjaneyulu' ,'Goutham'];
 const DEFAULT_SHOPS_DATA = [
   { name: 'Medical Shop', baseRent: 55000 },
   { name: 'Sham Home', baseRent: 63000 },
@@ -25,8 +25,8 @@ const DEFAULT_SHOPS_DATA = [
 const PREDEFINED_EXPENSES = [
   "House electrical",
   "Bore",
-  "Worker",
   "Internet bill",
+  "Worker",  
 ];
 
 const formatCurrency = (amount: number) => {
@@ -48,8 +48,9 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
   // EXPENSE STATES
   const [newExpenseDesc, setNewExpenseDesc] = useState('');
   const [newExpenseAmount, setNewExpenseAmount] = useState('');
-  const [newExpensePayer, setNewExpensePayer] = useState('Shared');
-  const [isCustomExpense, setIsCustomExpense] = useState(false); // New state for toggling input
+  // FIX: Default to first member (Anjaneyulu) instead of 'Shared' to prevent math errors
+  const [newExpensePayer, setNewExpensePayer] = useState(MEMBERS[0]); 
+  const [isCustomExpense, setIsCustomExpense] = useState(false);
   
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
@@ -233,10 +234,9 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
       const expense = { description: newExpenseDesc, amount: Number(newExpenseAmount), paidBy: newExpensePayer }; 
       await api.addExpense(currentMonth, expense); 
       
-      // Reset form
       setNewExpenseDesc(''); 
       setNewExpenseAmount(''); 
-      setIsCustomExpense(false); // Reset custom toggle
+      setIsCustomExpense(false); 
       
       await refreshData(true); 
     } catch (err) { 
@@ -406,7 +406,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                   {shops.length === 0 && ( <button onClick={handleSeedShops} disabled={submitting} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 disabled:opacity-50"> {submitting ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14} />} Load Default Shops </button> )} 
                </div>
                
-               {/* 1. MOBILE VIEW (CARDS) - FIXED "PAID TO" VISIBILITY */}
+               {/* 1. MOBILE VIEW (CARDS) - MATCHING IMAGE LAYOUT */}
                <div className="md:hidden p-4 space-y-4">
                  {shops.map((shop) => {
                    const record = records.find((r) => r.shop_id === shop.id); 
@@ -459,7 +459,6 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
 
                          {/* FOOTER ACTION BUTTON */}
                          <div>
-                           {/* LOGIC CHANGE: If NOT paid, show Record Button. If Paid (Partial or Full), show Green Box. */}
                            {!isPaid ? (
                               <button 
                                 onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} 
@@ -649,7 +648,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                             value={newExpensePayer} 
                             onChange={(e) => setNewExpensePayer(e.target.value)}
                         > 
-                            <option value="Shared">Shared / Pool</option> 
+                            {/* FIX: Removed 'Shared / Pool' option to force proper attribution */}
                             {MEMBERS.map(m => <option key={m} value={m}>{m}</option>)} 
                         </select> 
                         <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
