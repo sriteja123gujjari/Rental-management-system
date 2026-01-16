@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import {PDF_FILE_PREFIX} from '../const'
 
 // Format Helper
 const formatIndianCurrency = (amount: number) => {
@@ -18,7 +19,7 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
   
   doc.setFontSize(16);
   doc.setTextColor(30, 41, 59);
-  doc.text(`Rent Report: ${monthName} ${year}`, 14, 16);
+  doc.text(`${PDF_FILE_PREFIX}: ${monthName} ${year}`, 14, 16);
   
   const today = new Date();
   const dateStr = `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;

@@ -4,48 +4,16 @@ import {
   ChevronLeft, ChevronRight, TrendingUp, CreditCard, 
   Loader2, ArrowRightLeft, UserCircle, Save, AlertCircle, Pencil, X, LogOut, Share2
 } from 'lucide-react';
-import { api } from '../services/api'; // Ensure this path is correct
-import { generatePDF } from '../services/pdf'; // Ensure this path is correct
-
-// --- TYPES ---
-interface Shop {
-  id: string;
-  name: string;
-  base_rent: number;
-  month: string;
-}
-
-interface RentRecord {
-  id: string;
-  shop_id: string;
-  amount_paid: number;
-  collected_by: string;
-  status: string;
-  month: string;
-}
-
-interface Expense {
-  id: string;
-  description: string;
-  amount: number;
-  paid_by: string;
-  month: string;
-}
-
-const MEMBERS = ['Anjaneyulu', 'Srinivas', 'Goutham'];
-
-const DEFAULT_SHOPS_DATA = [
-  { name: 'Medical Shop', baseRent: 55000 },
-  { name: 'Sham Home', baseRent: 63000 },
-  { name: 'Brown Bear', baseRent: 45000 },
-  { name: 'Dental', baseRent: 13000 },
-  { name: 'Gym', baseRent: 45000 },
-  { name: 'Bhavya Clinic', baseRent: 10500 },
-];
+import { api } from '../services/api';
+import { generatePDF } from '../services/pdf';
+import {MEMBERS, DEFAULT_SHOPS_DATA} from '../const'
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0, style: 'decimal' }).format(amount);
 };
+
+
+
 
 const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
   const [shops, setShops] = useState<Shop[]>([]);
@@ -384,7 +352,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <StatCard title="Received" value={monthlyData.received} type="success" icon={TrendingUp} />
           <StatCard title="Expenses" value={monthlyData.totalExpenses} type="danger" icon={Receipt} />
-          <StatCard title="Net Profit" value={monthlyData.net} type="primary" icon={Wallet} />
+          <StatCard title="Balance" value={monthlyData.net} type="primary" icon={Wallet} />
           <StatCard title="Share (1/3)" value={monthlyData.split} type="warning" icon={Users} />
         </div>
 
