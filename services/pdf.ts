@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import {PDF_FILE_PREFIX} from '../const'
+import { PDF_FILE_PREFIX } from '../const';
 
 // Format Helper
 const formatIndianCurrency = (amount: number) => {
@@ -9,6 +9,7 @@ const formatIndianCurrency = (amount: number) => {
 
 export const generatePDF = (shops: any[], records: any[], expenses: any[], currentMonth: string, monthlyData: any, returnType: 'save' | 'blob' | 'base64' = 'save') => {
   const doc = new jsPDF();
+
   const [year, month] = currentMonth.split('-');
   const monthName = new Date(Number(year), Number(month) - 1).toLocaleString('default', { month: 'long' });
 
@@ -78,13 +79,14 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
 
   // --- 4. SHOPS TABLE ---
   const shopBody = shops.map(shop => {
-    const rec = records.find(r => r.shopId === shop.id);
+    // FIX: Using snake_case for Supabase data
+    const rec = records.find(r => r.shop_id === shop.id);
     const isPaid = rec?.status === 'Paid';
     return [
       shop.name, 
-      `Rs. ${formatIndianCurrency(shop.baseRent)}`, 
-      isPaid ? `Paid (${rec.collectedBy})` : 'Unpaid', 
-      `Rs. ${formatIndianCurrency(rec?.amountPaid || 0)}`
+      `Rs. ${formatIndianCurrency(shop.base_rent)}`, 
+      isPaid ? `Paid (${rec.collected_by})` : 'Unpaid', 
+      `Rs. ${formatIndianCurrency(rec?.amount_paid || 0)}`
     ];
   });
 
@@ -114,12 +116,19 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
     doc.setFontSize(11);
     doc.setTextColor(30, 41, 59);
     doc.text('Monthly Expenditures', 14, currentY);
-    const expenseBody = expenses.map(exp => [
-      exp.description,
-      exp.paidBy,
-      new Date(exp.timestamp).toLocaleDateString(),
-      `Rs. ${formatIndianCurrency(exp.amount)}`
-    ]);
+    const expenseBody = expenses.map(exp => {
+      // FIX: Robust Date Handling
+      // 1. Try created_at (Supabase default)
+      // 2. Try date (Custom field)
+      // 3. Fallback to current date
+      const dateVal = exp.created_at || exp.date || new Date().toISOString();
+      return [
+        exp.description,
+        exp.paid_by,
+        new Date(dateVal).toLocaleDateString('en-IN'), // Fixed formatting
+        `Rs. ${formatIndianCurrency(exp.amount)}`
+      ];
+    });
     autoTable(doc, {
       startY: currentY + 4,
       head: [['Description', 'Paid By', 'Date', 'Amount']],
@@ -130,15 +139,12 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
     });
   }
 
-  // --- 6. CRITICAL RETURN LOGIC ---
+  // --- 6. RETURN LOGIC ---
   if (returnType === 'base64') {
-     // MOBILE: Returns raw base64 string (removes 'data:application/pdf;base64,' prefix)
      return doc.output('datauristring').split(',')[1];
   } else if (returnType === 'blob') {
-    // WEB SHARE: Returns Blob
     return doc.output('blob'); 
   } else {
-    // WEB DOWNLOAD: Saves directly
     doc.save(`Rent_Report_${currentMonth}.pdf`); 
   }
 };
