@@ -6,17 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { generatePDF } from '../services/pdf';
-
-const MEMBERS = ['Anjaneyulu', 'Srinivas', 'Goutham'];
-
-const DEFAULT_SHOPS_DATA = [
-  { name: 'Medical Shop', baseRent: 55000 },
-  { name: 'Sham Home', baseRent: 63000 },
-  { name: 'Brown Bear', baseRent: 45000 },
-  { name: 'Dental', baseRent: 13000 },
-  { name: 'Gym', baseRent: 45000 },
-  { name: 'Bhavya Clinic', baseRent: 10500 },
-];
+import {MEMBERS, DEFAULT_SHOPS_DATA} from '../const'
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-IN', {
@@ -24,6 +14,9 @@ const formatCurrency = (amount: number) => {
     style: 'decimal',
   }).format(amount);
 };
+
+
+
 
 const Dashboard = ({ user, onLogout }) => {
   const [shops, setShops] = useState([]);
