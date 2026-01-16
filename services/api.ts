@@ -1,157 +1,144 @@
-import { supabase } from './supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+export const supabase = createClient(supabaseUrl, supabaseKey);
+
+// --- FIX: MATH BASED MONTH CALCULATION (No Timezone bugs) ---
+const getPreviousMonth = (currentMonth: string) => {
+  const [yearStr, monthStr] = currentMonth.split('-');
+  let year = parseInt(yearStr);
+  let month = parseInt(monthStr);
+
+  // Subtract 1 month
+  month -= 1;
+
+  // Handle year rollback (e.g. Jan 2025 -> Dec 2024)
+  if (month === 0) {
+    month = 12;
+    year -= 1;
+  }
+
+  // Return formatted string "YYYY-MM"
+  return `${year}-${String(month).padStart(2, '0')}`;
+};
 
 export const api = {
-  // --- AUTHENTICATION ---
-  login: async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    if (!data.user) throw new Error("Login failed");
-
-    return { 
-      user: {
-        id: data.user.id,
-        email: data.user.email,
-        familyId: data.user.user_metadata.familyId,
-        name: data.user.user_metadata.name
-      }, 
-      token: data.session.access_token 
-    };
+  // 1. FETCH DATA
+  async fetchMonthData(month: string) {
+    const { data: shops } = await supabase.from('shops').select('*').eq('month', month);
+    const { data: rentRecords } = await supabase.from('rent_records').select('*').eq('month', month);
+    const { data: expenses } = await supabase.from('expenses').select('*').eq('month', month);
+    return { shops, rentRecords, expenses };
   },
 
-  register: async ({ email, password, name, familyId }) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name, familyId: familyId.toUpperCase() } }
-    });
-    if (error) throw error;
-    return data;
-  },
+  // 2. FETCH ARREARS (Recursive to carry over past debt)
+  async fetchArrears(currentMonth: string, depth = 0): Promise<Record<string, number>> {
+    // Safety stop after 6 months to prevent infinite loops
+    if (depth > 6) return {};
 
-  // --- DATA FETCHING (SPEED OPTIMIZED) ---
-  fetchMonthData: async (month) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("User not found");
-    const familyId = user.user_metadata.familyId;
+    const prevMonth = getPreviousMonth(currentMonth);
+    
+    // 1. Get shops from previous month
+    const { data: shops } = await supabase.from('shops').select('*').eq('month', prevMonth);
+    
+    // If no shops existed last month, there's no debt to calculate
+    if (!shops || shops.length === 0) return {};
 
-    // PERFORMANCE FIX: Fetch all 3 tables in PARALLEL (At the same time)
-    const [shopsRes, rentsRes, expensesRes] = await Promise.all([
-      supabase.from('shops').select('*').eq('family_id', familyId).eq('month', month),
-      supabase.from('rent_records').select('*').eq('family_id', familyId).eq('month', month),
-      supabase.from('expenses').select('*').eq('family_id', familyId).eq('month', month)
-    ]);
+    // 2. Get payments from previous month
+    const { data: prevRecords } = await supabase.from('rent_records').select('*').eq('month', prevMonth);
+    
+    // 3. RECURSION: Get debt from the month BEFORE previous
+    const prevPrevArrears = await this.fetchArrears(prevMonth, depth + 1);
 
-    // Check errors
-    if (shopsRes.error) console.error("Error shops:", shopsRes.error);
-    if (rentsRes.error) console.error("Error rents:", rentsRes.error);
-    if (expensesRes.error) console.error("Error expenses:", expensesRes.error);
-
-    return {
-      // Logic unchanged: Map DB snake_case to Frontend camelCase
-      shops: shopsRes.data?.map(s => ({ ...s, baseRent: s.base_rent })) || [],
+    const arrearsMap: Record<string, number> = {};
+    
+    shops.forEach(shop => {
+      const record = prevRecords?.find(r => r.shop_id === shop.id);
+      const paid = record ? record.amount_paid : 0;
       
-      rentRecords: rentsRes.data?.map(r => ({
-        ...r, 
-        shopId: r.shop_id, 
-        amountPaid: r.amount_paid, 
-        collectedBy: r.collected_by 
-      })) || [], 
+      // Get debt from the past (e.g. from 2 months ago)
+      const debtFromPast = prevPrevArrears[shop.name] || 0;
+
+      // FORMULA: (Rent + Old Debt) - Paid Amount
+      const due = (shop.base_rent + debtFromPast) - paid;
       
-      expenses: expensesRes.data?.map(e => ({ ...e, paidBy: e.paid_by })) || []
-    };
-  },
-
-  // --- ADD / EDIT DATA ---
-  addShop: async (month, shop) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('shops').insert({
-      month,
-      family_id: user?.user_metadata.familyId,
-      name: shop.name,
-      base_rent: shop.baseRent
+      // If due is positive, they owe money. 
+      if (due > 0) {
+        arrearsMap[shop.name] = due; 
+      }
     });
+
+    return arrearsMap;
   },
 
-  updateShop: async (month, shopId, update) => {
-    const dbUpdate: any = {};
-    if (update.name) dbUpdate.name = update.name;
-    if (update.baseRent) dbUpdate.base_rent = update.baseRent;
-
-    // 1. Update Shop
-    const { error } = await supabase.from('shops').update(dbUpdate).eq('id', shopId);
-    if (error) throw error;
-
-    // 2. Logic Sync: Update rent record if base rent changed
-    if (update.baseRent) {
-        await supabase
-            .from('rent_records')
-            .update({ amount_paid: update.baseRent })
-            .eq('shop_id', shopId)
-            .eq('month', month);
-    }
-  },
-
-  deleteShop: async (month, shopId) => {
-    await supabase.from('shops').delete().eq('id', shopId);
-  },
-
-  // --- TOGGLE RENT ---
-  toggleRent: async (month, shopId, baseRent, member) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    const familyId = user?.user_metadata.familyId;
-
+  // 3. SAVE PAYMENT
+  async toggleRent(month: string, shopId: string, amount: number, collector: string) {
     const { data: existing } = await supabase
-        .from('rent_records')
-        .select('*')
-        .eq('shop_id', shopId)
-        .eq('month', month)
-        .maybeSingle(); 
+      .from('rent_records')
+      .select('*')
+      .eq('month', month)
+      .eq('shop_id', shopId)
+      .single();
 
-    if (existing) {
-        await supabase.from('rent_records').delete().eq('id', existing.id);
-    } else {
-        await supabase.from('rent_records').insert({
-            shop_id: shopId,
-            month,
-            family_id: familyId,
-            status: 'Paid',
-            amount_paid: baseRent,
-            collected_by: member
-        });
+    if (amount <= 0 && existing) {
+      await supabase.from('rent_records').delete().eq('id', existing.id);
+    } else if (existing) {
+      await supabase.from('rent_records').update({
+        amount_paid: amount,
+        collected_by: collector
+      }).eq('id', existing.id);
+    } else if (amount > 0) {
+      await supabase.from('rent_records').insert([{
+        month,
+        shop_id: shopId,
+        amount_paid: amount,
+        collected_by: collector,
+        status: 'Paid',
+        family_id: 'Gujjari'
+      }]);
     }
 
-    return api.fetchMonthData(month);
+    const { data: rentRecords } = await supabase.from('rent_records').select('*').eq('month', month);
+    return { rentRecords };
   },
 
-  // --- UPDATE RENT RECORD ---
-  updateRentRecord: async (month, shopId, update) => {
-    const dbUpdate: any = {};
-    if (update.collectedBy) dbUpdate.collected_by = update.collectedBy;
-    if (update.amountPaid) dbUpdate.amount_paid = update.amountPaid;
-
-    const { error } = await supabase
-      .from('rent_records')
-      .update(dbUpdate)
-      .eq('shop_id', shopId)
-      .eq('month', month);
-
-    if (error) throw error;
-
-    return api.fetchMonthData(month);
+  // 4. ADD SHOP
+  async addShop(month: string, shop: { name: string; baseRent: number }) {
+    await supabase.from('shops').insert([{ 
+        month, name: shop.name, base_rent: shop.baseRent, family_id: 'Gujjari' 
+    }]);
   },
 
-  addExpense: async (month, expense) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('expenses').insert({
-      month,
-      family_id: user?.user_metadata.familyId,
-      description: expense.description,
-      amount: expense.amount,
-      paid_by: expense.paidBy
-    });
+  // 5. UPDATE SHOP
+  async updateShop(month: string, id: string, updates: { name: string; baseRent: number }) {
+    await supabase.from('shops').update({ name: updates.name, base_rent: updates.baseRent })
+      .eq('month', month).eq('id', id);
   },
 
-  deleteExpense: async (month, expId) => {
-    await supabase.from('expenses').delete().eq('id', expId);
+  // 6. DELETE SHOP
+  async deleteShop(month: string, id: string) {
+    await supabase.from('rent_records').delete().eq('month', month).eq('shop_id', id);
+    await supabase.from('shops').delete().eq('month', month).eq('id', id);
+  },
+
+  // 7. UPDATE COLLECTOR
+  async updateRentRecord(month: string, shopId: string, updates: any) {
+    await supabase.from('rent_records').update({ collected_by: updates.collectedBy })
+      .eq('month', month).eq('shop_id', shopId);
+    const { data: rentRecords } = await supabase.from('rent_records').select('*').eq('month', month);
+    return { rentRecords };
+  },
+
+  // 8. EXPENSES
+  async addExpense(month: string, expense: any) {
+    await supabase.from('expenses').insert([{
+      month, description: expense.description, amount: expense.amount, paid_by: expense.paidBy, family_id: 'Gujjari'
+    }]);
+  },
+
+  async deleteExpense(month: string, id: string) {
+    await supabase.from('expenses').delete().eq('month', month).eq('id', id);
   }
 };

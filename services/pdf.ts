@@ -1,17 +1,17 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// ✅ Helper to format numbers like 2,32,145
+// Format Helper
 const formatIndianCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(amount);
 };
 
-// Added 'returnBlob' parameter to the end
-export const generatePDF = (shops: any[], records: any[], expenses: any[], currentMonth: string, monthlyData: any, returnBlob: boolean = false) => {
+export const generatePDF = (shops: any[], records: any[], expenses: any[], currentMonth: string, monthlyData: any, returnType: 'save' | 'blob' | 'base64' = 'save') => {
   const doc = new jsPDF();
   const [year, month] = currentMonth.split('-');
   const monthName = new Date(Number(year), Number(month) - 1).toLocaleString('default', { month: 'long' });
 
+  // --- 1. HEADER & TITLE ---
   doc.setFont("helvetica", "bold");
   doc.setFillColor(248, 250, 252);
   doc.rect(0, 0, 210, 25, 'F');
@@ -26,52 +26,44 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
   doc.setTextColor(71, 85, 105);
   doc.text(`Date: ${dateStr}`, 160, 16);
 
-  // Summary Cards
+  // --- 2. SUMMARY CARDS ---
   const cardY = 30;
   const cardWidth = 43;
   const cardHeight = 20;
   const gap = 8;
   const margin = 14;
 
-  // Received
+  // Received Card
   doc.setFillColor(34, 197, 94);
   doc.roundedRect(margin, cardY, cardWidth, cardHeight, 2, 2, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(8); doc.text('RECEIVED', margin + 4, cardY + 7);
-  // ✅ CHANGED HERE
   doc.setFontSize(11); doc.text(`Rs. ${formatIndianCurrency(monthlyData.received)}`, margin + 4, cardY + 16);
 
-  // Expenses
+  // Expenses Card
   doc.setFillColor(239, 68, 68);
   doc.roundedRect(margin + cardWidth + gap, cardY, cardWidth, cardHeight, 2, 2, 'F');
   doc.setFontSize(8); doc.text('EXPENSES', margin + cardWidth + gap + 4, cardY + 7);
-  // ✅ CHANGED HERE
   doc.setFontSize(11); doc.text(`Rs. ${formatIndianCurrency(monthlyData.totalExpenses)}`, margin + cardWidth + gap + 4, cardY + 16);
 
-  // Target
+  // Target Split Card
   doc.setFillColor(59, 130, 246);
   doc.roundedRect(margin + (cardWidth + gap) * 2, cardY, cardWidth, cardHeight, 2, 2, 'F');
   doc.setFontSize(8); doc.text('TARGET SPLIT', margin + (cardWidth + gap) * 2 + 4, cardY + 7);
-  // ✅ CHANGED HERE
   doc.setFontSize(11); doc.text(`Rs. ${formatIndianCurrency(monthlyData.split)}`, margin + (cardWidth + gap) * 2 + 4, cardY + 16);
 
   let currentY = cardY + cardHeight + 15;
   const tableStyles = { fontSize: 9, cellPadding: 4, fontStyle: 'bold' as const }; 
   const headStyles = { fillColor: [59, 130, 246] as [number, number, number], fontStyle: 'bold' as const, fontSize: 9, cellPadding: 4 };
 
-  // Section 1: Settlement Plan
+  // --- 3. SETTLEMENT TABLE ---
   if (monthlyData.transactions.length > 0) {
       doc.setFontSize(11);
       doc.setTextColor(30, 41, 59);
       doc.text('Settlement Plan', 14, currentY);
-      // ✅ CHANGED HERE (Inside map)
       const transactionBody = monthlyData.transactions.map((t: any) => [
-          t.from, 
-          'pays', 
-          t.to, 
-          `Rs. ${formatIndianCurrency(t.amount)}`
+          t.from, 'pays', t.to, `Rs. ${formatIndianCurrency(t.amount)}`
       ]);
-      
       autoTable(doc, {
           startY: currentY + 4,
           head: [['From', 'Action', 'To', 'Amount']],
@@ -83,16 +75,14 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
       currentY = (doc as any).lastAutoTable.finalY + 12;
   }
 
-  // Section 2: Shop Payment Details
+  // --- 4. SHOPS TABLE ---
   const shopBody = shops.map(shop => {
     const rec = records.find(r => r.shopId === shop.id);
     const isPaid = rec?.status === 'Paid';
     return [
       shop.name, 
-      // ✅ CHANGED HERE
       `Rs. ${formatIndianCurrency(shop.baseRent)}`, 
       isPaid ? `Paid (${rec.collectedBy})` : 'Unpaid', 
-      // ✅ CHANGED HERE
       `Rs. ${formatIndianCurrency(rec?.amountPaid || 0)}`
     ];
   });
@@ -111,30 +101,24 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
     didParseCell: (data) => {
       if (data.section === 'body' && data.column.index === 2) {
         const text = data.cell.text[0] || '';
-        if (text.startsWith('Paid')) {
-          data.cell.styles.textColor = [34, 197, 94]; 
-        } else if (text === 'Unpaid') {
-          data.cell.styles.textColor = [239, 68, 68]; 
-        }
+        if (text.startsWith('Paid')) data.cell.styles.textColor = [34, 197, 94];
+        else if (text === 'Unpaid') data.cell.styles.textColor = [239, 68, 68];
       }
     }
   });
   currentY = (doc as any).lastAutoTable.finalY + 12;
 
-  // Section 3: Expenditure List
+  // --- 5. EXPENSES TABLE ---
   if (expenses.length > 0) {
     doc.setFontSize(11);
     doc.setTextColor(30, 41, 59);
     doc.text('Monthly Expenditures', 14, currentY);
-    
     const expenseBody = expenses.map(exp => [
       exp.description,
       exp.paidBy,
       new Date(exp.timestamp).toLocaleDateString(),
-      // ✅ CHANGED HERE
       `Rs. ${formatIndianCurrency(exp.amount)}`
     ]);
-
     autoTable(doc, {
       startY: currentY + 4,
       head: [['Description', 'Paid By', 'Date', 'Amount']],
@@ -145,9 +129,15 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
     });
   }
 
-  if (returnBlob) {
+  // --- 6. CRITICAL RETURN LOGIC ---
+  if (returnType === 'base64') {
+     // MOBILE: Returns raw base64 string (removes 'data:application/pdf;base64,' prefix)
+     return doc.output('datauristring').split(',')[1];
+  } else if (returnType === 'blob') {
+    // WEB SHARE: Returns Blob
     return doc.output('blob'); 
   } else {
+    // WEB DOWNLOAD: Saves directly
     doc.save(`Rent_Report_${currentMonth}.pdf`); 
   }
 };
