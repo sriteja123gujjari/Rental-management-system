@@ -2,18 +2,36 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Building2, Receipt, Wallet, Users, Download, Plus, Trash2, 
   ChevronLeft, ChevronRight, TrendingUp, CreditCard, 
-  Loader2, ArrowRightLeft, UserCircle, Save, AlertCircle, Pencil, X, LogOut, Share2
+  Loader2, ArrowRightLeft, UserCircle, Save, AlertCircle, Pencil, X, LogOut, Share2, List
 } from 'lucide-react';
 import { api } from '../services/api';
 import { generatePDF } from '../services/pdf';
-import {MEMBERS, DEFAULT_SHOPS_DATA} from '../const'
+
+// Define types locally
+interface Shop { id: string; name: string; base_rent: number; }
+interface RentRecord { shop_id: string; amount_paid: number; collected_by: string; status: string; }
+interface Expense { id: string; description: string; amount: number; paid_by: string; }
+
+const MEMBERS = ['Anjaneyulu', 'Srinivas', 'Goutham'];
+const DEFAULT_SHOPS_DATA = [
+  { name: 'Medical Shop', baseRent: 55000 },
+  { name: 'Sham Home', baseRent: 63000 },
+  { name: 'Brown Bear', baseRent: 45000 },
+  { name: 'Dental', baseRent: 13000 },
+  { name: 'Gym', baseRent: 45000 },
+  { name: 'Bhavya Clinic', baseRent: 10500 },
+];
+
+const PREDEFINED_EXPENSES = [
+  "House electrical",
+  "Bore",
+  "Worker",
+  "Internet bill",
+];
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0, style: 'decimal' }).format(amount);
 };
-
-
-
 
 const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
   const [shops, setShops] = useState<Shop[]>([]);
@@ -22,17 +40,17 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
   const [arrears, setArrears] = useState<Record<string, number>>({});
   
-  // SHOP MANAGEMENT STATES
+  // STATES
   const [newShopName, setNewShopName] = useState('');
   const [newShopRent, setNewShopRent] = useState('');
   const [editingShopId, setEditingShopId] = useState<string | null>(null);
-
-  // EXPENSE MANAGEMENT STATES
+  
+  // EXPENSE STATES
   const [newExpenseDesc, setNewExpenseDesc] = useState('');
   const [newExpenseAmount, setNewExpenseAmount] = useState('');
   const [newExpensePayer, setNewExpensePayer] = useState('Shared');
+  const [isCustomExpense, setIsCustomExpense] = useState(false); // New state for toggling input
   
-  // PAYMENT MODAL STATES
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -49,8 +67,6 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
       setShops(data.shops || []);
       setRecords(data.rentRecords || []);
       setExpenses(data.expenses || []);
-      
-      // Fetch arrears (Previous month debt)
       const arrearsData = await api.fetchArrears(currentMonth);
       setArrears(arrearsData);
     } catch (err) {
@@ -120,16 +136,13 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
   }, [records, expenses]);
 
   // --- HANDLERS ---
-
-  const handleOpenPaymentModal = (shop: Shop, currentRecord: RentRecord | null, totalDue: number) => {
+  const handleOpenPaymentModal = (shop: Shop, currentRecord: RentRecord | null, outstandingBalance: number) => {
     setSelectedShop(shop);
     if (currentRecord) {
-      // Editing existing payment
       setPaymentAmount(currentRecord.amount_paid.toString());
       setPaymentCollector(currentRecord.collected_by || MEMBERS[0]);
     } else {
-      // New payment (Default to Total Due)
-      setPaymentAmount(totalDue.toString());
+      setPaymentAmount(outstandingBalance.toString());
       setPaymentCollector(MEMBERS[0]);
     }
     setPaymentModalOpen(true);
@@ -219,8 +232,12 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
     try { 
       const expense = { description: newExpenseDesc, amount: Number(newExpenseAmount), paidBy: newExpensePayer }; 
       await api.addExpense(currentMonth, expense); 
+      
+      // Reset form
       setNewExpenseDesc(''); 
       setNewExpenseAmount(''); 
+      setIsCustomExpense(false); // Reset custom toggle
+      
       await refreshData(true); 
     } catch (err) { 
       console.error("Error adding expense:", err); 
@@ -256,7 +273,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
       {/* PAYMENT MODAL */}
       {paymentModalOpen && selectedShop && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 m-4">
             <div className="bg-indigo-600 p-6 text-white">
               <h3 className="text-lg font-bold opacity-80">Record Payment</h3>
               <h2 className="text-2xl font-black">{selectedShop.name}</h2>
@@ -286,7 +303,9 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                    />
                  </div>
                  <p className="text-[10px] text-slate-400 mt-2 text-right">
-                   Total Due: ₹{formatCurrency(selectedShop.base_rent + (arrears[selectedShop.name] || 0))}
+                   Remaining Due: ₹{formatCurrency( 
+                      (selectedShop.base_rent + (arrears[selectedShop.name] || 0)) - (Number(paymentAmount) || 0)
+                   )}
                  </p>
                </div>
 
@@ -328,7 +347,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
             <div className="bg-indigo-600 p-2 rounded-lg text-white shadow-lg shadow-indigo-200"> <Building2 size={24} /> </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">Gujjari's Rental</h1>
-              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Group: {user.familyId}</p>
+              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Group: {user?.familyId}</p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
@@ -349,10 +368,11 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+        {/* STATS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <StatCard title="Received" value={monthlyData.received} type="success" icon={TrendingUp} />
           <StatCard title="Expenses" value={monthlyData.totalExpenses} type="danger" icon={Receipt} />
-          <StatCard title="Balance" value={monthlyData.net} type="primary" icon={Wallet} />
+          <StatCard title="Net Balance" value={monthlyData.net} type="primary" icon={Wallet} />
           <StatCard title="Share (1/3)" value={monthlyData.split} type="warning" icon={Users} />
         </div>
 
@@ -379,7 +399,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
               </section>
             )}
 
-            {/* --- SHOP STATUS SECTION (RESPONSIVE) --- */}
+            {/* --- SHOP STATUS SECTION --- */}
             <section className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
                <div className="p-5 border-b border-slate-50 flex items-center justify-between"> 
                   <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800"><Building2 className="text-indigo-500" size={20} />Shop Status</h2> 
@@ -392,17 +412,19 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                    const record = records.find((r) => r.shop_id === shop.id); 
                    const isPaid = !!record;
                    const pastDue = arrears[shop.name] || 0; 
-                   const totalDue = shop.base_rent + pastDue; 
+                   
+                   // CALCULATION LOGIC:
+                   const totalObligation = shop.base_rent + pastDue; 
                    const paidAmount = record?.amount_paid || 0;
-                   // UPDATED: Balance calculation logic
-                   const balance = paidAmount - totalDue;
+                   // Outstanding Balance = What they supposed to pay - what they paid
+                   const outstandingBalance = totalObligation - paidAmount;
 
                    return (
                      <div key={shop.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-4 relative">
                          <div className="flex justify-between items-start">
                            <div>
                               <h3 className="font-bold text-slate-800 text-lg">{shop.name}</h3>
-                              <p className="text-xs text-slate-400 font-mono mt-1">Base Rent: ₹{formatCurrency(shop.base_rent)}</p>
+                              <p className="text-xs text-slate-400 font-mono mt-1">Rent: ₹{formatCurrency(shop.base_rent)}</p>
                            </div>
                            <div className="flex gap-1">
                               <button onClick={() => { setEditingShopId(shop.id); setNewShopName(shop.name); setNewShopRent(shop.base_rent.toString()); }} className="p-2 bg-slate-50 text-slate-400 rounded-lg"><Pencil size={14}/></button>
@@ -410,32 +432,34 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                            </div>
                          </div>
                          <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl">
-                           <div className ="col-span-2 pt-2">
+                           <div>
                               <span className="text-[10px] uppercase text-slate-400 font-bold">Arrears</span>
                               <div className="text-rose-500 font-bold text-sm">{pastDue > 0 ? `+ ₹${formatCurrency(pastDue)}` : '-'}</div>
                            </div>
-                           {/* <div>
-                              <span className="text-[10px] uppercase text-slate-400 font-bold">Balance</span>
-                              <div className={`font-bold text-sm ${balance < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>{balance > 0 ? '+' : ''}₹{formatCurrency(balance)}</div>
-                           </div> */}
+                           <div>
+                              <span className="text-[10px] uppercase text-indigo-400 font-bold">Paid</span>
+                              <div className="text-emerald-600 font-bold text-sm">₹{formatCurrency(paidAmount)}</div>
+                           </div>
                            <div className="col-span-2 pt-2 border-t border-slate-200 mt-1 flex justify-between items-center">
-                              <span className="text-[10px] uppercase text-indigo-400 font-bold">Total Due</span>
-                              <span className="text-indigo-700 font-black text-lg font-mono">₹{formatCurrency(totalDue)}</span>
+                              <span className="text-[10px] uppercase text-slate-500 font-bold">Remaining Due</span>
+                              <span className={`font-black text-lg font-mono ${outstandingBalance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                ₹{formatCurrency(outstandingBalance)}
+                              </span>
                            </div>
                          </div>
                          <div>
-                           {!isPaid ? (
-                              <button onClick={() => handleOpenPaymentModal(shop, null, totalDue)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 flex items-center justify-center gap-2 active:scale-95 transition-transform"> <CreditCard size={16}/> Record Payment </button>
+                           {!isPaid || outstandingBalance > 0 ? (
+                              <button onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 flex items-center justify-center gap-2 active:scale-95 transition-transform"> <CreditCard size={16}/> {isPaid ? 'Update Payment' : 'Record Payment'} </button>
                            ) : (
                               <div className="flex items-center gap-2">
                                  <div className="flex-grow bg-emerald-50 border border-emerald-100 p-2 rounded-xl flex items-center justify-between px-4">
                                     <div className="flex flex-col">
                                        <span className="text-[9px] font-bold text-emerald-600 uppercase">Paid</span>
-                                       <span className="text-[10px] text-slate-400">by {record?.collected_by}</span>
+                                       <span className="text-[10px] text-slate-400">to {record?.collected_by}</span>
                                     </div>
                                     <div className="text-emerald-700 font-black font-mono text-lg">₹{formatCurrency(record.amount_paid)}</div>
                                  </div>
-                                 <button onClick={() => handleOpenPaymentModal(shop, record, totalDue)} className="h-full px-3 bg-white border border-slate-200 rounded-xl text-slate-400"><Pencil size={16}/></button>
+                                 <button onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} className="h-full px-3 bg-white border border-slate-200 rounded-xl text-slate-400"><Pencil size={16}/></button>
                                  <button onClick={() => clearPayment(shop.id)} className="h-full px-3 bg-white border border-rose-100 text-rose-400 rounded-xl"><X size={16}/></button>
                               </div>
                            )}
@@ -452,9 +476,9 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                      <tr className="bg-slate-50/50 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100"> 
                        <th className="px-6 py-4 text-slate-700">Shop</th> 
                        <th className="px-4 py-4">Rent</th> 
-                       <th className="px-4 py-4 text-rose-500">Arrears</th> 
-                       <th className="px-4 py-4 text-indigo-700">Total Due</th> 
-                       <th className="px-4 py-4 text-center">Amount Paid</th> 
+                       <th className="px-4 py-4 text-indigo-700">Arrears</th> 
+                       <th className="px-4 py-4 text-rose-700">Remaining Due</th> 
+                       <th className="px-4 py-4 text-center">Payment</th> 
                        <th className="px-4 py-4 text-right">Actions</th> 
                      </tr> 
                    </thead> 
@@ -464,23 +488,25 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                        const isPaid = !!record;
                        const isProcessing = processingId === shop.id; 
                        const pastDue = arrears[shop.name] || 0; 
-                       const totalDue = shop.base_rent + pastDue; 
+                       
+                       // CALCULATION LOGIC:
+                       const totalObligation = shop.base_rent + pastDue; 
                        const paidAmount = record?.amount_paid || 0;
-                       // UPDATED: Balance calculation logic
-                       const balance = paidAmount - totalDue;
+                       // Outstanding Balance = What they supposed to pay - what they paid
+                       const outstandingBalance = totalObligation - paidAmount;
 
                        return ( 
                          <tr key={shop.id} className="hover:bg-slate-50/30 transition-colors group"> 
                            <td className="px-6 py-4 bg-white border-r border-slate-50 font-bold text-slate-700 text-sm">{shop.name}</td> 
                            <td className="px-4 py-4 bg-white border-r border-slate-50 font-mono text-xs text-slate-500">₹{formatCurrency(shop.base_rent)}</td> 
-                           <td className={`px-4 py-4 bg-white border-r border-slate-50 font-mono text-xs font-bold ${balance < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                             {formatCurrency(balance)}
+                           <td className="px-4 py-4 bg-white border-r border-slate-50 font-mono text-xs font-bold text-indigo-700">{pastDue > 0 ? formatCurrency(pastDue) : '-'}</td>
+                           <td className="px-4 py-4 bg-white border-r border-slate-50 font-mono text-sm font-black text-rose-700">
+                             ₹{formatCurrency(outstandingBalance)}
                            </td>
-                           <td className="px-4 py-4 bg-white border-r border-slate-50 font-mono text-sm font-black text-indigo-700">₹{formatCurrency(totalDue)}</td>
                            <td className="px-4 py-4"> 
                              <div className="flex flex-col gap-2 max-w-[200px] mx-auto"> 
                                {!isPaid ? (
-                                 <button onClick={() => handleOpenPaymentModal(shop, null, totalDue)} disabled={isProcessing} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-black transition-all shadow-md"> 
+                                 <button onClick={() => handleOpenPaymentModal(shop, null, outstandingBalance)} disabled={isProcessing} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-black transition-all shadow-md"> 
                                    {isProcessing ? <Loader2 size={12} className="animate-spin"/> : <CreditCard size={12} />} Record Payment
                                  </button>
                                ) : (
@@ -491,7 +517,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                                       <span className="text-[9px] text-slate-400 mt-0.5">{record?.collected_by}</span>
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                      <button onClick={() => handleOpenPaymentModal(shop, record, totalDue)} className="p-1.5 bg-white border rounded hover:bg-indigo-50 hover:text-indigo-600 text-slate-400"> <Pencil size={12} /> </button>
+                                      <button onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} className="p-1.5 bg-white border rounded hover:bg-indigo-50 hover:text-indigo-600 text-slate-400"> <Pencil size={12} /> </button>
                                       <button onClick={() => clearPayment(shop.id)} className="p-1.5 bg-white border rounded hover:bg-rose-50 hover:text-rose-600 text-slate-400"> <X size={12} /> </button>
                                     </div>
                                   </div>
@@ -512,7 +538,121 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                </div>
             </section>
 
-            <section className="bg-white rounded-3xl shadow-xl p-6 border border-slate-100"> <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-800"> <div className="p-1.5 bg-rose-100 rounded-lg text-rose-600"> <CreditCard size={20} /> </div> Quick Expense Record </h3> <div className="flex flex-col gap-4"> <div> <label className="text-[2px] font-bold text-slate-200 uppercase ml-1 block mb-1">Description</label> <select className="w-full font-bold text-slate-500 px-4 h-12 rounded-xl bg-slate-50 ring-1 ring-slate-100 focus:ring-2 focus:ring-rose-500 outline-none text-base sm:text-sm shadow-sm" value={newExpenseDesc} onChange={(e) => setNewExpenseDesc(e.target.value)}> <option value="">Select expense type...</option> <option value="House electrical">House electrical</option> <option value="Bore">Bore</option> <option value="Worker">Worker</option> <option value="Internet bill">Internet bill</option> </select> </div> <div className="flex gap-3"> <div className="w-1/2"> <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Amount</label> <input type="number" placeholder="0.00" className="w-full px-4 h-12 rounded-xl bg-slate-50 ring-1 ring-slate-100 focus:ring-2 focus:ring-rose-500 outline-none text-base sm:text-sm shadow-sm" value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value)} /> </div> <div className="w-1/2"> <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Paid By</label> <select className="w-full px-2 h-12 rounded-xl bg-slate-50 ring-1 ring-slate-100 outline-none text-sm shadow-sm font-bold" value={newExpensePayer} onChange={(e) => setNewExpensePayer(e.target.value)}> <option value="Shared">Shared / Pool</option> {MEMBERS.map(m => <option key={m} value={m}>{m}</option>)} </select> </div> </div> <button onClick={addExpense} disabled={submitting} className="w-full h-12 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"> {submitting ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Record Expense </button> </div> </section>
+            {/* EXPENSE SECTION with Premium CSS & UX */}
+            <section className="bg-white rounded-3xl shadow-xl p-6 border border-slate-100 relative overflow-hidden"> 
+              {/* Background Decoration */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full blur-3xl -z-10 opacity-50 pointer-events-none"></div>
+
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-800"> 
+                <div className="p-2 bg-indigo-100 rounded-xl text-indigo-600 shadow-sm"> <CreditCard size={20} /> </div> 
+                Quick Expense Record 
+              </h3> 
+              
+              <div className="flex flex-col gap-5"> 
+                
+                {/* DESCRIPTION FIELD (The Magic Part) */}
+                <div> 
+                  <label className="text-xs font-bold text-slate-400 uppercase ml-1 block mb-1.5 tracking-wider">Description</label> 
+                  
+                  <div className="relative group">
+                    {isCustomExpense ? (
+                      // 1. CUSTOM TEXT INPUT MODE
+                      <div className="relative animate-in fade-in zoom-in duration-200">
+                        <input 
+                          type="text"
+                          autoFocus
+                          placeholder="Type expense description..."
+                          className="w-full pl-4 pr-12 h-14 rounded-2xl bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-700 font-bold text-sm transition-all shadow-sm"
+                          value={newExpenseDesc}
+                          onChange={(e) => setNewExpenseDesc(e.target.value)}
+                          onKeyDown={(e) => {
+                            if(e.key === 'Escape') setIsCustomExpense(false);
+                          }}
+                        />
+                        <button 
+                          onClick={() => setIsCustomExpense(false)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl border border-slate-100 shadow-sm transition-all"
+                          title="Back to list"
+                        >
+                          <List size={18} />
+                        </button>
+                      </div>
+                    ) : (
+                      // 2. DROPDOWN SELECT MODE
+                      <div className="relative">
+                        <select 
+                          className="w-full appearance-none pl-4 pr-10 h-14 rounded-2xl bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-600 font-bold text-sm transition-all cursor-pointer shadow-sm hover:bg-slate-100/50" 
+                          value={newExpenseDesc} 
+                          onChange={(e) => {
+                            if (e.target.value === 'CUSTOM_ENTRY_TRIGGER') {
+                              setIsCustomExpense(true);
+                              setNewExpenseDesc('');
+                            } else {
+                              setNewExpenseDesc(e.target.value);
+                            }
+                          }}
+                        > 
+                          <option value="">Select expense type...</option> 
+                          <option value="CUSTOM_ENTRY_TRIGGER" className="font-bold text-indigo-600 bg-indigo-50">✨ Type Custom...</option>
+                          <hr />
+                          {PREDEFINED_EXPENSES.map(exp => (
+                            <option key={exp} value={exp} className="text-slate-700 py-2">{exp}</option>
+                          ))}
+                        </select> 
+                        {/* Custom Chevron Icon for better UI */}
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                          <ChevronRight size={18} className="rotate-90" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div> 
+
+                {/* AMOUNT & PAYER ROW */}
+                <div className="flex gap-4"> 
+                  <div className="w-1/2"> 
+                    <label className="text-xs font-bold text-slate-400 uppercase ml-1 block mb-1.5 tracking-wider">Amount</label> 
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
+                      <input 
+                        type="number" 
+                        placeholder="0" 
+                        className="w-full pl-8 pr-4 h-14 rounded-2xl bg-slate-50 border border-slate-200 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 outline-none text-slate-800 font-black text-lg transition-all shadow-sm placeholder:text-slate-300" 
+                        value={newExpenseAmount} 
+                        onChange={(e) => setNewExpenseAmount(e.target.value)} 
+                      /> 
+                    </div>
+                  </div> 
+                  <div className="w-1/2"> 
+                    <label className="text-xs font-bold text-slate-400 uppercase ml-1 block mb-1.5 tracking-wider">Paid By</label> 
+                    <div className="relative">
+                        <select 
+                            className="w-full appearance-none pl-4 pr-10 h-14 rounded-2xl bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-600 font-bold text-sm transition-all cursor-pointer shadow-sm" 
+                            value={newExpensePayer} 
+                            onChange={(e) => setNewExpensePayer(e.target.value)}
+                        > 
+                            <option value="Shared">Shared / Pool</option> 
+                            {MEMBERS.map(m => <option key={m} value={m}>{m}</option>)} 
+                        </select> 
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                          <UserCircle size={18} />
+                        </div>
+                    </div>
+                  </div> 
+                </div> 
+
+                {/* SUBMIT BUTTON */}
+                <button 
+                  onClick={addExpense} 
+                  disabled={submitting || !newExpenseDesc || !newExpenseAmount} 
+                  className="w-full h-14 mt-2 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-sm shadow-xl shadow-slate-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+                > 
+                  {submitting ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />} 
+                  Record Expense 
+                </button> 
+              </div> 
+            </section>
+            
             <section className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden"> <div className="p-5 border-b border-slate-50 flex items-center justify-between"> <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800"><Receipt className="text-rose-500" size={20} />Expenditures List</h2> <div className="bg-rose-50 text-rose-700 px-3 py-1 rounded-lg text-xs font-bold">Total: ₹{formatCurrency(monthlyData.totalExpenses)}</div> </div> <div className="p-5 space-y-3 custom-scrollbar"> {expenses.length === 0 ? (<p className="text-center py-8 text-slate-400 text-sm italic">No expenses recorded for this month.</p>) : (expenses.map((exp) => (<div key={exp.id} className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-100 shadow-sm gap-3"> <div className="flex items-center gap-4"> <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center"><Receipt size={18} /></div> <div> <p className="font-bold text-slate-700 text-sm">{exp.description}</p> <p className="text-[10px] text-slate-400 uppercase tracking-wider">Paid by {exp.paid_by}</p> </div> </div> <div className="flex items-center gap-4"> <span className="font-bold text-rose-600 text-lg font-mono">-₹{formatCurrency(exp.amount)}</span> <button onClick={() => deleteExpense(exp.id)} disabled={processingId === exp.id} className="text-slate-300 hover:text-rose-500 p-2"> {processingId === exp.id ? <Loader2 size={16} className="animate-spin text-rose-500" /> : <Trash2 size={16} />} </button> </div> </div>)))} </div> </section>
           </div>
 
