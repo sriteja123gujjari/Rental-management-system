@@ -13,26 +13,24 @@ interface RentRecord { shop_id: string; amount_paid: number; collected_by: strin
 interface Expense { id: string; description: string; amount: number; paid_by: string; }
 
 // --- CONSTANTS ---
-const MEMBERS = ['Srinivas', 'Anjaneyulu', 'Goutham'];
+const MEMBERS = ['Anjaneyulu', 'Srinivas', 'Goutham'];
 const DEFAULT_SHOPS_DATA = [
-  { name: 'Medical Shop', baseRent: 60000 },
   { name: 'Shaam Home', baseRent: 63000 },
+  { name: 'Medical Shop', baseRent: 60000 },
   { name: 'Brown Bear', baseRent: 45000 },
+  { name: 'Bhavya Clinic', baseRent: 10500 },
   { name: 'Dental', baseRent: 13000 },
   { name: 'Gym', baseRent: 42000 },
-  { name: 'Bhavya Clinic', baseRent: 10500 },
   { name: 'Besmile', baseRent: 10000 },
 ];
 
 const PREDEFINED_EXPENSES = [
   "House electrical",
   "Bore",
-  "Internet bill",
   "Worker",
-
+  "Internet bill",
 ];
 
-// --- HELPER ---
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0, style: 'decimal' }).format(amount);
 };
@@ -45,7 +43,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
   const [arrears, setArrears] = useState<Record<string, number>>({});
   
-  // SHOP MANAGEMENT STATES
+  // STATES
   const [newShopName, setNewShopName] = useState('');
   const [newShopRent, setNewShopRent] = useState('');
   const [editingShopId, setEditingShopId] = useState<string | null>(null);
@@ -265,16 +263,16 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
   };
 
   if (loading) return ( 
-    <div className="flex flex-col items-center justify-center h-screen bg-slate-50 gap-4"> 
+    <div className="flex flex-col items-center justify-center h-screen bg-gray-50 gap-4"> 
       <Loader2 className="animate-spin text-indigo-600" size={48} /> 
-      <p className="text-slate-500 font-medium animate-pulse">Loading Dashboard...</p> 
+      <p className="text-gray-500 font-medium animate-pulse">Loading Dashboard...</p> 
     </div> 
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-24 relative selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen bg-gray-50 text-slate-800 font-sans pb-24 pt-8 md:pt-0 relative selection:bg-indigo-100 selection:text-indigo-900">
       
-      {/* Inject Google Font: Plus Jakarta Sans for Premium Feel */}
+      {/* Inject Google Font: Plus Jakarta Sans */}
       <style>
         {`@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
           body { font-family: 'Plus Jakarta Sans', sans-serif; }`}
@@ -356,35 +354,46 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
 
       {/* HEADER */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-20 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3 sm:h-24 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
-            <div className="flex items-center gap-3">
-                <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-200"> <Building2 size={22} /> </div>
-                <div>
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          
+          {/* Brand */}
+          <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-200"> <Building2 size={22} /> </div>
+              <div>
                 <h1 className="text-xl font-black tracking-tight text-slate-900 leading-none">Gujjari's Rental</h1>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Group: {user?.familyId}</p>
-                </div>
-            </div>
-            <div className="flex sm:hidden gap-2">
-                <button onClick={handleShare} className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl active:bg-emerald-100"><Share2 size={20}/></button>
-                <button onClick={onLogout} className="p-2.5 bg-slate-100 text-slate-500 rounded-xl active:bg-slate-200"><LogOut size={20}/></button>
-            </div>
+                {/* 3) Fallback Group ID */}
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Group: {user?.familyId || 'GUJJARI'}</p>
+              </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-            <div className="flex items-center bg-slate-100 rounded-2xl p-1.5 w-full sm:w-auto justify-between sm:justify-center ring-1 ring-slate-200">
-              <button onClick={() => changeMonth(-1)} className="p-2 bg-white rounded-xl shadow-sm text-slate-600 hover:text-indigo-600 transition-all active:scale-90"> <ChevronLeft size={18} /> </button>
-              <div className="px-6 text-center flex flex-col">
-                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Period</span>
-                 <span className="font-bold text-slate-800 text-sm whitespace-nowrap"> {new Date(currentMonth + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })} </span>
+          {/* Period Selector (Full Width on Mobile) */}
+          <div className="flex items-center bg-slate-100 rounded-2xl p-1.5 w-full md:w-auto justify-between sm:justify-center ring-1 ring-slate-200 order-last md:order-none">
+            <button onClick={() => changeMonth(-1)} className="h-10 w-10 flex items-center justify-center bg-white rounded-xl shadow-sm text-slate-600 hover:text-indigo-600 transition-all active:scale-90"> <ChevronLeft size={18} /> </button>
+            <div className="px-6 text-center flex flex-col">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Period</span>
+                <span className="font-bold text-slate-800 text-sm whitespace-nowrap"> {new Date(currentMonth + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })} </span>
+            </div>
+            <button onClick={() => changeMonth(1)} className="h-10 w-10 flex items-center justify-center bg-white rounded-xl shadow-sm text-slate-600 hover:text-indigo-600 transition-all active:scale-90"> <ChevronRight size={18} /> </button>
+          </div>
+          
+          {/* Actions Container */}
+          <div className="w-full md:w-auto">
+              
+              {/* 2) DESKTOP: Only PDF & Logout (No Share), Clean Layout */}
+              <div className="hidden md:flex justify-end gap-2">
+                  <button onClick={handleDownloadPdf} className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all shadow-md text-sm active:scale-95 whitespace-nowrap"> <Download size={18} /> <span>PDF</span> </button>
+                  <button onClick={onLogout} className="p-3 bg-white border border-slate-200 text-slate-500 rounded-xl hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all" title="Logout"> <LogOut size={20} /> </button>
               </div>
-              <button onClick={() => changeMonth(1)} className="p-2 bg-white rounded-xl shadow-sm text-slate-600 hover:text-indigo-600 transition-all active:scale-90"> <ChevronRight size={18} /> </button>
-            </div>
-            
-            <div className="hidden sm:flex w-full sm:w-auto gap-2">
-                <button onClick={handleDownloadPdf} className="flex-grow sm:flex-grow-0 flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all shadow-md text-sm active:scale-95 whitespace-nowrap"> <Download size={18} /> <span>PDF</span> </button>
-                <button onClick={onLogout} className="p-3 bg-white border border-slate-200 text-slate-500 rounded-xl hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all" title="Logout"> <LogOut size={20} /> </button>
-            </div>
+
+              {/* 1) MOBILE: Wide Share Button (2/3) + Logout (1/3) */}
+              <div className="flex md:hidden gap-2">
+                  <button onClick={handleShare} className="flex-[4] h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center gap-2 font-bold shadow-md shadow-emerald-100 active:scale-95 transition-all"> 
+                    <Share2 size={20} /> Share
+                  </button>
+                  <button onClick={onLogout} className="flex-1 h-12 bg-slate-100 text-slate-500 border border-slate-200 rounded-2xl flex items-center justify-center active:scale-95 transition-all"> 
+                    <LogOut size={20} />
+                  </button>
+              </div>
           </div>
         </div>
       </header>
@@ -473,7 +482,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                            <div className="flex justify-between items-center border-b border-slate-200 pb-4">
                               <div className="flex flex-col">
                                 <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">ARREARS</span>
-                                {/* UPDATED: No '+' sign, RED Color for Amount */}
+                                {/* RED Color for Arrears, No '+' Sign */}
                                 {pastDue > 0 ? (
                                   <span className="text-rose-600 font-black text-lg mt-1">₹{formatCurrency(pastDue)}</span>
                                 ) : (
@@ -523,11 +532,11 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                  })}
                </div>
                
-               {/* 2. DESKTOP VIEW (TABLE) - GLOSSY */}
+               {/* 2. DESKTOP VIEW (TABLE) - CLEAN/PREVIOUS STYLE */}
                <div className="hidden md:block overflow-x-auto"> 
                  <table className="w-full text-left min-w-[700px]"> 
                    <thead> 
-                     <tr className="bg-slate-50/50 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100/50"> 
+                     <tr className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100"> 
                        <th className="px-8 py-5 text-slate-700">Shop</th> 
                        <th className="px-6 py-5">Rent</th> 
                        <th className="px-6 py-5 text-indigo-700">Arrears</th> 
@@ -536,7 +545,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                        <th className="px-6 py-5 text-right">Actions</th> 
                      </tr> 
                    </thead> 
-                   <tbody className="divide-y divide-slate-50/50"> 
+                   <tbody className="divide-y divide-slate-50"> 
                      {shops.map((shop) => { 
                        const record = records.find((r) => r.shop_id === shop.id); 
                        const isPaid = !!record;
@@ -548,45 +557,52 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                        const outstandingBalance = totalObligation - paidAmount;
 
                        return ( 
-                         <tr key={shop.id} className="group hover:bg-indigo-50/30 transition-all duration-200"> 
-                           <td className="px-8 py-5 font-bold text-slate-700 text-sm relative">
+                         <tr key={shop.id} className="hover:bg-slate-50 transition-colors"> 
+                           <td className="px-8 py-5 font-bold text-slate-700 text-sm">
                              {shop.name}
-                             {isPaid && <div className="absolute left-2 top-1/2 -translate-y-1/2 w-1 h-8 bg-emerald-400 rounded-r-full"></div>}
                            </td> 
                            <td className="px-6 py-5 font-mono text-xs text-slate-500">₹{formatCurrency(shop.base_rent)}</td> 
-                           {/* UPDATED: Red text if arrears, no + sign */}
+                           
+                           {/* DESKTOP ARREARS: Red if > 0, No '+', Green Clear if 0 */}
                            <td className="px-6 py-5 font-mono text-xs font-bold">
                              {pastDue > 0 ? (
-                               <span className="px-2 py-1 bg-rose-50 text-rose-600 rounded-lg border border-rose-100">₹{formatCurrency(pastDue)}</span>
+                               <span className="text-rose-600">₹{formatCurrency(pastDue)}</span>
                              ) : (
-                               <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100 opacity-80 flex w-fit items-center gap-1"><CheckCircle2 size={10}/> Clear</span>
+                               <span className="text-emerald-500 opacity-80 flex items-center gap-1"><CheckCircle2 size={10}/> Clear</span>
                              )}
                            </td>
+                           
                            <td className="px-6 py-5 font-mono text-sm font-bold">
                              <span className={outstandingBalance > 0 ? 'text-rose-600' : 'text-emerald-600'}>₹{formatCurrency(outstandingBalance)}</span>
                            </td>
+                           
                            <td className="px-6 py-5"> 
-                             <div className="flex flex-col gap-2 max-w-[240px] mx-auto transition-transform duration-200 group-hover:scale-[1.02]"> 
+                             <div className="flex flex-col gap-2 max-w-[240px] mx-auto"> 
                                {!isPaid ? (
-                                 <button onClick={() => handleOpenPaymentModal(shop, null, outstandingBalance)} disabled={isProcessing} className="flex items-center justify-center gap-2 w-full py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-lg shadow-slate-200/50"> 
-                                   {isProcessing ? <Loader2 size={12} className="animate-spin"/> : <CreditCard size={14} />} Record Payment
+                                 <button onClick={() => handleOpenPaymentModal(shop, null, outstandingBalance)} disabled={isProcessing} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-md"> 
+                                   {isProcessing ? <Loader2 size={12} className="animate-spin"/> : <CreditCard size={12} />} Record Payment
                                  </button>
                                ) : (
                                  <div className="flex items-center gap-2">
-                                   <div className="flex-1 bg-emerald-50/50 border border-emerald-100 rounded-xl p-2 flex flex-col items-center backdrop-blur-sm">
+                                   <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-xl p-2 flex flex-col items-center">
                                       <span className="text-[9px] text-emerald-600 font-bold uppercase tracking-wide">PAID</span>
                                       <span className="text-sm font-bold text-emerald-700 font-mono">₹{formatCurrency(record?.amount_paid)}</span>
                                       <span className="text-[9px] text-slate-400 mt-0.5">{record?.collected_by}</span>
                                     </div>
-                                    <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                      <button onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} className="p-1.5 bg-white border border-slate-200 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-400 transition-colors shadow-sm"> <Pencil size={14} /> </button>
-                                      <button onClick={() => clearPayment(shop.id)} className="p-1.5 bg-white border border-slate-200 rounded-lg hover:bg-rose-50 hover:text-rose-600 text-slate-400 transition-colors shadow-sm"> <X size={14} /> </button>
+                                    <div className="flex flex-col gap-1">
+                                      <button onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} className="p-1.5 bg-white border border-slate-200 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-400 transition-colors"> <Pencil size={14} /> </button>
+                                      <button onClick={() => clearPayment(shop.id)} className="p-1.5 bg-white border border-slate-200 rounded-lg hover:bg-rose-50 hover:text-rose-600 text-slate-400 transition-colors"> <X size={14} /> </button>
                                     </div>
                                   </div>
                                 )} 
                               </div> 
                             </td> 
-                            <td className="px-6 py-5 text-right"> <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"> <button onClick={() => { setEditingShopId(shop.id); setNewShopName(shop.name); setNewShopRent(shop.base_rent.toString()); }} className="text-slate-300 hover:text-indigo-500 p-2 bg-white rounded-lg shadow-sm border border-slate-100"><Pencil size={16} /></button> <button onClick={() => deleteShop(shop.id)} className="text-slate-300 hover:text-rose-500 p-2 bg-white rounded-lg shadow-sm border border-slate-100" disabled={isProcessing}> {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} </button> </div> </td> 
+                            <td className="px-6 py-5 text-right"> 
+                              <div className="flex justify-end gap-2"> 
+                                <button onClick={() => { setEditingShopId(shop.id); setNewShopName(shop.name); setNewShopRent(shop.base_rent.toString()); }} className="text-slate-300 hover:text-indigo-500 p-2"><Pencil size={16} /></button> 
+                                <button onClick={() => deleteShop(shop.id)} className="text-slate-300 hover:text-rose-500 p-2" disabled={isProcessing}> {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} </button> 
+                              </div> 
+                            </td> 
                           </tr> 
                         ); 
                       })} 
@@ -600,34 +616,33 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                </div>
             </section>
 
-            {/* EXPENSE SECTION - Premium UI with Black Button */}
+            {/* EXPENSE SECTION with Premium CSS & UX */}
             <section className="bg-white rounded-[2.5rem] shadow-2xl shadow-indigo-100/60 p-6 sm:p-8 border border-slate-100 relative overflow-hidden group hover:shadow-indigo-200/50 transition-all duration-500"> 
               
+              {/* Background Decoration */}
               <div className="absolute -top-24 -right-24 w-64 h-64 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 rounded-full blur-3xl opacity-60 pointer-events-none group-hover:opacity-80 transition-opacity duration-700"></div>
               <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-blue-500/20 to-cyan-500/20 rounded-full blur-3xl opacity-40 pointer-events-none"></div>
 
-              <div className="relative flex items-center gap-4 mb-8"> 
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-200 transform group-hover:scale-110 transition-transform duration-300"> 
-                  <CreditCard size={24} /> 
-                </div> 
-                <div>
-                  <h3 className="text-xl font-bold text-slate-800 tracking-tight">Quick Expense</h3>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">Add New Record</p>
-                </div>
-              </div> 
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-3 text-slate-800 relative z-10"> 
+                <div className="p-2.5 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-200"> <CreditCard size={22} /> </div> 
+                Quick Expense Record 
+              </h3> 
               
               <div className="flex flex-col gap-6 relative z-10"> 
                 
+                {/* DESCRIPTION FIELD */}
                 <div> 
                   <label className="text-[11px] font-bold text-slate-400 uppercase ml-1 block mb-2.5 tracking-widest">Description</label> 
-                  <div className="relative">
+                  <div className="relative group">
                     {isCustomExpense ? (
+                      // 1. CUSTOM TEXT INPUT MODE
                       <div className="relative animate-in fade-in zoom-in duration-200">
                         <input 
                           type="text" 
                           autoFocus 
                           placeholder="What did you pay for?" 
                           className="w-full pl-5 pr-14 h-16 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:bg-white focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 outline-none text-slate-700 font-bold text-lg transition-all shadow-sm placeholder:text-slate-300 placeholder:font-medium" 
+                          style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                           value={newExpenseDesc} 
                           onChange={(e) => setNewExpenseDesc(e.target.value)} 
                           onKeyDown={(e) => { if(e.key === 'Escape') setIsCustomExpense(false); }} 
@@ -641,14 +656,16 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                         </button>
                       </div>
                     ) : (
+                      // 2. DROPDOWN SELECT MODE
                       <div className="relative group/select">
                         <select 
                           className="w-full appearance-none pl-5 pr-12 h-16 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:bg-white focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 outline-none text-slate-700 font-bold text-lg transition-all cursor-pointer shadow-sm hover:border-violet-200" 
+                          style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                           value={newExpenseDesc} 
                           onChange={(e) => { if (e.target.value === 'CUSTOM_ENTRY_TRIGGER') { setIsCustomExpense(true); setNewExpenseDesc(''); } else { setNewExpenseDesc(e.target.value); } }}
                         > 
-                          <option value="">Select Category</option> 
-                          <option value="CUSTOM_ENTRY_TRIGGER" className="font-bold text-violet-600 bg-violet-50">Custom</option>
+                          <option value="">Select Category...</option> 
+                          <option value="CUSTOM_ENTRY_TRIGGER" className="font-bold text-violet-600 bg-violet-50">✨ Type Custom...</option>
                           <hr />
                           {PREDEFINED_EXPENSES.map(exp => ( <option key={exp} value={exp} className="text-slate-700 font-medium py-2">{exp}</option> ))}
                         </select> 
@@ -658,6 +675,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                   </div>
                 </div> 
 
+                {/* AMOUNT & PAYER ROW */}
                 <div className="flex gap-4"> 
                   <div className="w-1/2"> 
                     <label className="text-[11px] font-bold text-slate-400 uppercase ml-1 block mb-2.5 tracking-widest">Amount</label> 
@@ -667,6 +685,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                         type="number" 
                         placeholder="0" 
                         className="w-full pl-10 pr-4 h-16 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:bg-white focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 outline-none text-slate-800 font-black text-2xl transition-all shadow-sm placeholder:text-slate-300" 
+                        style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                         value={newExpenseAmount} 
                         onChange={(e) => setNewExpenseAmount(e.target.value)} 
                       /> 
@@ -677,6 +696,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                     <div className="relative group/payer">
                         <select 
                           className="w-full appearance-none pl-5 pr-12 h-16 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:bg-white focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 outline-none text-slate-700 font-bold text-lg transition-all cursor-pointer shadow-sm hover:border-violet-200" 
+                          style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                           value={newExpensePayer} 
                           onChange={(e) => setNewExpensePayer(e.target.value)}
                         > 
@@ -692,6 +712,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                   onClick={addExpense} 
                   disabled={submitting || !newExpenseDesc || !newExpenseAmount} 
                   className="w-full h-16 mt-2 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 text-base shadow-xl shadow-slate-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+                  style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}
                 > 
                   {submitting ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />} 
                   Record Expense 
