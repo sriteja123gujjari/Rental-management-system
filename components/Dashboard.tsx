@@ -13,7 +13,7 @@ interface RentRecord { shop_id: string; amount_paid: number; collected_by: strin
 interface Expense { id: string; description: string; amount: number; paid_by: string; }
 
 // --- CONSTANTS ---
-const MEMBERS = ['Anjaneyulu', 'Srinivas', 'Goutham'];
+const MEMBERS = ['Srinivas', 'Anjaneyulu', 'Goutham'];
 const DEFAULT_SHOPS_DATA = [
   { name: 'Shaam Home', baseRent: 63000 },
   { name: 'Medical Shop', baseRent: 60000 },
@@ -664,8 +664,8 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                           value={newExpenseDesc} 
                           onChange={(e) => { if (e.target.value === 'CUSTOM_ENTRY_TRIGGER') { setIsCustomExpense(true); setNewExpenseDesc(''); } else { setNewExpenseDesc(e.target.value); } }}
                         > 
-                          <option value="">Select Category...</option> 
-                          <option value="CUSTOM_ENTRY_TRIGGER" className="font-bold text-violet-600 bg-violet-50">✨ Type Custom...</option>
+                          <option value="">Select Category</option> 
+                          <option value="CUSTOM_ENTRY_TRIGGER" className="font-bold text-violet-600 bg-violet-50">Custom</option>
                           <hr />
                           {PREDEFINED_EXPENSES.map(exp => ( <option key={exp} value={exp} className="text-slate-700 font-medium py-2">{exp}</option> ))}
                         </select> 
