@@ -1,202 +1,116 @@
-import { createClient } from '@supabase/supabase-js';
+import React, { useState } from 'react';
+import { api } from '../services/api';
+import { Link, useNavigate } from 'react-router-dom';
+import { UserPlus, Loader2, Building2 } from 'lucide-react';
 
-// 1. Initialize Supabase
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase URL or Key in .env file');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
-
-// --- HELPER: Math-based Month Calculation (No Timezone bugs) ---
-const getPreviousMonth = (currentMonth: string) => {
-  const [yearStr, monthStr] = currentMonth.split('-');
-  let year = parseInt(yearStr);
-  let month = parseInt(monthStr);
-
-  month -= 1;
-
-  if (month === 0) {
-    month = 12;
-    year -= 1;
-  }
-
-  return `${year}-${String(month).padStart(2, '0')}`;
-};
-
-export const api = {
-
-  // --- 1. AUTHENTICATION ---
-  async register(userData: { email: string; password: string; name: string }) {
-    // 🔍 Debugging: Log what is being received
-    console.log("Registering User Data:", userData);
-
-    // 🛡️ Safety Check: Ensure data exists before calling Supabase
-    if (!userData || !userData.email || !userData.password) {
-      throw new Error("Email and Password are required. Received: " + JSON.stringify(userData));
-    }
-
-    // 1. Create User in Supabase Auth
-    const { data, error } = await supabase.auth.signUp({
-      email: userData.email,
-      password: userData.password,
-      options: {
-        data: { full_name: userData.name, family_id: 'Gujjari' } // Meta data
-      }
-    });
-
-    if (error) throw error;
-    return data;
-  },
-
-  async login(credentials: { email: string; password: string }) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: credentials.email,
-      password: credentials.password,
-    });
-    if (error) throw error;
-    return { ...data.user, familyId: data.user?.user_metadata?.family_id };
-  },
-
-  async logout() {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-  },
-
-  // --- 2. DASHBOARD DATA ---
-
-  async fetchMonthData(month: string) {
-    // Run 3 queries in parallel for speed
-    const [shopsRes, recordsRes, expensesRes] = await Promise.all([
-      supabase.from('shops').select('*').eq('month', month),
-      supabase.from('rent_records').select('*').eq('month', month),
-      supabase.from('expenses').select('*').eq('month', month)
-    ]);
-
-    if (shopsRes.error) throw shopsRes.error;
-    if (recordsRes.error) throw recordsRes.error;
-    if (expensesRes.error) throw expensesRes.error;
-
-    return { 
-      shops: shopsRes.data || [], 
-      rentRecords: recordsRes.data || [], 
-      expenses: expensesRes.data || [] 
-    };
-  },
-
-  // --- 3. SMART ARREARS CALCULATION (Recursive) ---
+const Register = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
   
-  async fetchArrears(currentMonth: string, depth = 0): Promise<Record<string, number>> {
-    // Stop if we went back 6 months to prevent infinite loading
-    if (depth > 6) return {};
+  // Form State
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-    const prevMonth = getPreviousMonth(currentMonth);
-    
-    // Get shops from previous month
-    const { data: shops } = await supabase.from('shops').select('*').eq('month', prevMonth);
-    
-    // If no shops existed last month, there is no debt to carry over
-    if (!shops || shops.length === 0) return {};
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-    // Get payments from previous month
-    const { data: prevRecords } = await supabase.from('rent_records').select('*').eq('month', prevMonth);
-    
-    // RECURSION: Get debt from the month BEFORE previous
-    const prevPrevArrears = await this.fetchArrears(prevMonth, depth + 1);
+    try {
+      // 🔍 DEBUGGING: Check your console (F12) to see this log
+      console.log("Sending registration data:", { email, password, name });
 
-    const arrearsMap: Record<string, number> = {};
-    
-    shops.forEach(shop => {
-      const record = prevRecords?.find(r => r.shop_id === shop.id);
-      const paid = record ? record.amount_paid : 0;
+      // ✅ THE FIX: Wrap variables in an OBJECT { } 
+      await api.register({ 
+        name: name, 
+        email: email, 
+        password: password 
+      });
+
+      alert("Registration Successful! Please check your email to confirm.");
+      navigate('/login');
       
-      // Get debt from the past (Recursion result)
-      const debtFromPast = prevPrevArrears[shop.name] || 0;
-
-      // FORMULA: (Rent + Old Debt) - Paid Amount
-      const due = (shop.base_rent + debtFromPast) - paid;
-      
-      // Only add to map if there is actual debt
-      if (due > 0) {
-        arrearsMap[shop.name] = due; 
-      }
-    });
-
-    return arrearsMap;
-  },
-
-  // --- 4. ACTIONS (Rent, Shops, Expenses) ---
-
-  async toggleRent(month: string, shopId: string, amount: number, collector: string) {
-    // Check if record exists
-    const { data: existing } = await supabase
-      .from('rent_records')
-      .select('*')
-      .eq('month', month)
-      .eq('shop_id', shopId)
-      .single();
-
-    if (amount <= 0 && existing) {
-      // DELETE if amount is 0
-      await supabase.from('rent_records').delete().eq('id', existing.id);
-    } else if (existing) {
-      // UPDATE if exists
-      await supabase.from('rent_records').update({
-        amount_paid: amount,
-        collected_by: collector
-      }).eq('id', existing.id);
-    } else if (amount > 0) {
-      // INSERT if new
-      await supabase.from('rent_records').insert([{
-        month,
-        shop_id: shopId,
-        amount_paid: amount,
-        collected_by: collector,
-        status: 'Paid',
-        family_id: 'Gujjari'
-      }]);
+    } catch (err: any) {
+      console.error("Registration failed:", err);
+      // Show the specific error from Supabase
+      alert(err.message || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Return updated records for UI refresh
-    const { data: rentRecords } = await supabase.from('rent_records').select('*').eq('month', month);
-    return { rentRecords: rentRecords || [] };
-  },
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl shadow-indigo-100/50 w-full max-w-md border border-slate-100">
+        
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex p-3 bg-indigo-50 rounded-2xl text-indigo-600 mb-4 shadow-sm">
+            <Building2 size={32} />
+          </div>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Create Account</h1>
+          <p className="text-slate-400 text-sm font-medium mt-1">Join Gujjari's Rental System</p>
+        </div>
 
-  async addShop(month: string, shop: { name: string; baseRent: number }) {
-    await supabase.from('shops').insert([{ 
-        month, 
-        name: shop.name, 
-        base_rent: shop.baseRent, 
-        family_id: 'Gujjari' 
-    }]);
-  },
+        <form onSubmit={handleRegister} className="space-y-5">
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Full Name</label>
+            <input 
+              type="text" 
+              required
+              className="w-full h-14 px-5 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 transition-all placeholder:text-slate-300"
+              placeholder="e.g. Anjaneyulu"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
 
-  async updateShop(month: string, id: string, updates: { name: string; baseRent: number }) {
-    await supabase.from('shops').update({ 
-      name: updates.name, 
-      base_rent: updates.baseRent 
-    }).eq('month', month).eq('id', id);
-  },
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Email Address</label>
+            <input 
+              type="email" 
+              required
+              className="w-full h-14 px-5 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 transition-all placeholder:text-slate-300"
+              placeholder="name@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
 
-  async deleteShop(month: string, id: string) {
-    // Delete related records first (Foreign Key constraint)
-    await supabase.from('rent_records').delete().eq('month', month).eq('shop_id', id);
-    await supabase.from('shops').delete().eq('month', month).eq('id', id);
-  },
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Password</label>
+            <input 
+              type="password" 
+              required
+              minLength={6}
+              className="w-full h-14 px-5 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 transition-all placeholder:text-slate-300"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
 
-  async addExpense(month: string, expense: any) {
-    await supabase.from('expenses').insert([{
-      month, 
-      description: expense.description, 
-      amount: expense.amount, 
-      paid_by: expense.paidBy, 
-      family_id: 'Gujjari'
-    }]);
-  },
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full h-14 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all shadow-xl shadow-slate-200 disabled:opacity-70 flex items-center justify-center gap-2 active:scale-95 mt-4"
+          >
+            {loading ? <Loader2 className="animate-spin" /> : <UserPlus size={20} />}
+            <span>Sign Up</span>
+          </button>
+        </form>
 
-  async deleteExpense(month: string, id: string) {
-    await supabase.from('expenses').delete().eq('month', month).eq('id', id);
-  }
+        <div className="mt-8 text-center">
+          <p className="text-slate-400 text-sm font-medium">
+            Already have an account?{' '}
+            <Link to="/login" className="text-indigo-600 font-bold hover:text-indigo-700 hover:underline">
+              Log In
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 };
+
+export default Register;
