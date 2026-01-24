@@ -1,116 +1,185 @@
-import React, { useState } from 'react';
-import { api } from '../services/api';
-import { Link, useNavigate } from 'react-router-dom';
-import { UserPlus, Loader2, Building2 } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
 
-const Register = () => {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  
-  // Form State
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+// 1. Initialize Supabase
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase URL or Key in .env file');
+}
 
-    try {
-      // 🔍 DEBUGGING: Check your console (F12) to see this log
-      console.log("Sending registration data:", { email, password, name });
+export const supabase = createClient(supabaseUrl, supabaseKey);
 
-      // ✅ THE FIX: Wrap variables in an OBJECT { } 
-      await api.register({ 
-        name: name, 
-        email: email, 
-        password: password 
-      });
+// --- HELPER: Math-based Month Calculation (No Timezone bugs) ---
+const getPreviousMonth = (currentMonth: string) => {
+  const [yearStr, monthStr] = currentMonth.split('-');
+  let year = parseInt(yearStr);
+  let month = parseInt(monthStr);
 
-      alert("Registration Successful! Please check your email to confirm.");
-      navigate('/login');
-      
-    } catch (err: any) {
-      console.error("Registration failed:", err);
-      // Show the specific error from Supabase
-      alert(err.message || "Registration failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  month -= 1;
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl shadow-indigo-100/50 w-full max-w-md border border-slate-100">
-        
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex p-3 bg-indigo-50 rounded-2xl text-indigo-600 mb-4 shadow-sm">
-            <Building2 size={32} />
-          </div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Create Account</h1>
-          <p className="text-slate-400 text-sm font-medium mt-1">Join Gujjari's Rental System</p>
-        </div>
+  if (month === 0) {
+    month = 12;
+    year -= 1;
+  }
 
-        <form onSubmit={handleRegister} className="space-y-5">
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Full Name</label>
-            <input 
-              type="text" 
-              required
-              className="w-full h-14 px-5 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 transition-all placeholder:text-slate-300"
-              placeholder="e.g. Anjaneyulu"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Email Address</label>
-            <input 
-              type="email" 
-              required
-              className="w-full h-14 px-5 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 transition-all placeholder:text-slate-300"
-              placeholder="name@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Password</label>
-            <input 
-              type="password" 
-              required
-              minLength={6}
-              className="w-full h-14 px-5 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 transition-all placeholder:text-slate-300"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full h-14 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all shadow-xl shadow-slate-200 disabled:opacity-70 flex items-center justify-center gap-2 active:scale-95 mt-4"
-          >
-            {loading ? <Loader2 className="animate-spin" /> : <UserPlus size={20} />}
-            <span>Sign Up</span>
-          </button>
-        </form>
-
-        <div className="mt-8 text-center">
-          <p className="text-slate-400 text-sm font-medium">
-            Already have an account?{' '}
-            <Link to="/login" className="text-indigo-600 font-bold hover:text-indigo-700 hover:underline">
-              Log In
-            </Link>
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+  return `${year}-${String(month).padStart(2, '0')}`;
 };
 
-export default Register;
+export const api = {
+
+  // ==========================================
+  //  1. AUTHENTICATION (THIS WAS MISSING)
+  // ==========================================
+
+  // Register New User
+  async register(userData: { email: string; password: string; name: string }) {
+    console.log("API: Registering...", userData); 
+
+    if (!userData.email || !userData.password) {
+      throw new Error("Email and Password are required.");
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+      options: {
+        data: { full_name: userData.name, family_id: 'Gujjari' } // Store name in metadata
+      }
+    });
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Login Existing User
+  async login(credentials: { email: string; password: string }) {
+    console.log("API: Logging in...", credentials);
+
+    if (!credentials.email || !credentials.password) {
+        throw new Error("Email and Password are required.");
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: credentials.email,
+      password: credentials.password,
+    });
+
+    if (error) throw error;
+    
+    // Return user data along with the custom familyId from metadata
+    return { ...data.user, familyId: data.user?.user_metadata?.family_id };
+  },
+
+  // Logout
+  async logout() {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  },
+
+  // ==========================================
+  //  2. DATA FETCHING
+  // ==========================================
+
+  async fetchMonthData(month: string) {
+    const { data: shops } = await supabase.from('shops').select('*').eq('month', month);
+    const { data: rentRecords } = await supabase.from('rent_records').select('*').eq('month', month);
+    const { data: expenses } = await supabase.from('expenses').select('*').eq('month', month);
+    return { shops, rentRecords, expenses };
+  },
+
+  // ... (Your existing fetchArrears logic is fine, keeping it here) ...
+  async fetchArrears(currentMonth: string, depth = 0): Promise<Record<string, number>> {
+    if (depth > 6) return {};
+
+    const prevMonth = getPreviousMonth(currentMonth);
+    const { data: shops } = await supabase.from('shops').select('*').eq('month', prevMonth);
+    
+    if (!shops || shops.length === 0) return {};
+
+    const { data: prevRecords } = await supabase.from('rent_records').select('*').eq('month', prevMonth);
+    const prevPrevArrears = await this.fetchArrears(prevMonth, depth + 1);
+
+    const arrearsMap: Record<string, number> = {};
+    
+    shops.forEach(shop => {
+      const record = prevRecords?.find(r => r.shop_id === shop.id);
+      const paid = record ? record.amount_paid : 0;
+      const debtFromPast = prevPrevArrears[shop.name] || 0;
+      const due = (shop.base_rent + debtFromPast) - paid;
+      
+      if (due > 0) {
+        arrearsMap[shop.name] = due; 
+      }
+    });
+
+    return arrearsMap;
+  },
+
+  // ==========================================
+  //  3. ACTIONS
+  // ==========================================
+
+  async toggleRent(month: string, shopId: string, amount: number, collector: string) {
+    const { data: existing } = await supabase
+      .from('rent_records')
+      .select('*')
+      .eq('month', month)
+      .eq('shop_id', shopId)
+      .single();
+
+    if (amount <= 0 && existing) {
+      await supabase.from('rent_records').delete().eq('id', existing.id);
+    } else if (existing) {
+      await supabase.from('rent_records').update({
+        amount_paid: amount,
+        collected_by: collector
+      }).eq('id', existing.id);
+    } else if (amount > 0) {
+      await supabase.from('rent_records').insert([{
+        month,
+        shop_id: shopId,
+        amount_paid: amount,
+        collected_by: collector,
+        status: 'Paid',
+        family_id: 'Gujjari'
+      }]);
+    }
+
+    const { data: rentRecords } = await supabase.from('rent_records').select('*').eq('month', month);
+    return { rentRecords };
+  },
+
+  async addShop(month: string, shop: { name: string; baseRent: number }) {
+    await supabase.from('shops').insert([{ 
+        month, name: shop.name, base_rent: shop.baseRent, family_id: 'Gujjari' 
+    }]);
+  },
+
+  async updateShop(month: string, id: string, updates: { name: string; baseRent: number }) {
+    await supabase.from('shops').update({ name: updates.name, base_rent: updates.baseRent })
+      .eq('month', month).eq('id', id);
+  },
+
+  async deleteShop(month: string, id: string) {
+    await supabase.from('rent_records').delete().eq('month', month).eq('shop_id', id);
+    await supabase.from('shops').delete().eq('month', month).eq('id', id);
+  },
+
+  async updateRentRecord(month: string, shopId: string, updates: any) {
+    await supabase.from('rent_records').update({ collected_by: updates.collectedBy })
+      .eq('month', month).eq('shop_id', shopId);
+    const { data: rentRecords } = await supabase.from('rent_records').select('*').eq('month', month);
+    return { rentRecords };
+  },
+
+  async addExpense(month: string, expense: any) {
+    await supabase.from('expenses').insert([{
+      month, description: expense.description, amount: expense.amount, paid_by: expense.paidBy, family_id: 'Gujjari'
+    }]);
+  },
+
+  async deleteExpense(month: string, id: string) {
+    await supabase.from('expenses').delete().eq('month', month).eq('id', id);
+  }
+};
