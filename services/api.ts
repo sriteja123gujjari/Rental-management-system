@@ -29,15 +29,21 @@ const getPreviousMonth = (currentMonth: string) => {
 export const api = {
 
   // --- 1. AUTHENTICATION ---
-
-  // ✅ FIXED: Added register function
   async register(userData: { email: string; password: string; name: string }) {
+    // 🔍 Debugging: Log what is being received
+    console.log("Registering User Data:", userData);
+
+    // 🛡️ Safety Check: Ensure data exists before calling Supabase
+    if (!userData || !userData.email || !userData.password) {
+      throw new Error("Email and Password are required. Received: " + JSON.stringify(userData));
+    }
+
     // 1. Create User in Supabase Auth
     const { data, error } = await supabase.auth.signUp({
       email: userData.email,
       password: userData.password,
       options: {
-        data: { full_name: userData.name, family_id: 'Gujjari' } // Store extra data in metadata
+        data: { full_name: userData.name, family_id: 'Gujjari' } // Meta data
       }
     });
 
