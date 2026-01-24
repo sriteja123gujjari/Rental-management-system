@@ -41,95 +41,69 @@ const AuthPage = ({ onLogin }: AuthPageProps) => {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-50 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 relative overflow-hidden font-sans selection:bg-indigo-100 selection:text-indigo-900 p-4">
       
-      {/* LEFT SIDE - BRANDING / VISUAL (Hidden on Mobile) */}
-      <div className="hidden lg:flex lg:w-1/2 relative bg-slate-900 overflow-hidden flex-col justify-between p-12 text-white">
-        {/* Abstract Background Shapes */}
-        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-br from-indigo-600 to-violet-600 rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2"></div>
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-gradient-to-tr from-blue-600 to-cyan-500 rounded-full blur-3xl opacity-20 translate-y-1/3 -translate-x-1/3"></div>
-        
-        {/* Content */}
-        <div className="relative z-10">
-          <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
-            <Building2 size={24} className="text-indigo-300" />
-            <span className="font-bold tracking-wide text-sm">GUJJARI RENTALS</span>
-          </div>
-        </div>
+      {/* Background Decoration (Ambient Glows) */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-500/10 rounded-full blur-[100px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-500/10 rounded-full blur-[100px]"></div>
+      </div>
 
-        <div className="relative z-10 max-w-lg">
-          <h1 className="text-5xl font-black tracking-tight leading-tight mb-6">
-            Manage your <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
-              Commercial Assets
-            </span>
-            <br/> with confidence.
+      <div className="bg-white w-full max-w-[480px] rounded-[2.5rem] shadow-2xl shadow-indigo-100/60 border border-white/50 relative z-10 overflow-hidden backdrop-blur-sm">
+        
+        {/* Header Section */}
+        <div className="text-center pt-10 pb-6 px-8 bg-gradient-to-b from-white to-slate-50/50">
+          <div className="inline-flex p-3.5 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-500/30 mb-6 ring-4 ring-indigo-50">
+            <Building2 size={32} strokeWidth={2.5} />
+          </div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">
+            {isLogin ? 'Welcome Back' : 'Get Started'}
           </h1>
-          <p className="text-slate-400 text-lg leading-relaxed">
-            Track rents, manage expenses, and generate reports for your family group in one unified dashboard.
+          <p className="text-slate-500 font-medium text-sm">
+            {isLogin ? 'Enter your credentials to access your dashboard' : 'Create your family rental group in seconds'}
           </p>
         </div>
 
-        <div className="relative z-10 text-xs font-medium text-slate-500 uppercase tracking-widest">
-          © 2024 Gujjari System v2.0
-        </div>
-      </div>
-
-      {/* RIGHT SIDE - FORM */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative">
-        <div className="w-full max-w-[420px] space-y-8">
+        {/* Content Section */}
+        <div className="px-8 pb-10">
           
-          {/* Mobile Logo (Visible only on Mobile) */}
-          <div className="lg:hidden flex justify-center mb-6">
-            <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-200">
-              <Building2 size={32} />
-            </div>
-          </div>
-
-          <div className="text-center lg:text-left">
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-              {isLogin ? 'Welcome back' : 'Create an account'}
-            </h2>
-            <p className="text-slate-500 mt-2 font-medium">
-              {isLogin ? 'Please enter your details to sign in.' : 'Start your journey with a free account.'}
-            </p>
-          </div>
-
-          {/* TOGGLE SWITCH (Side by Side) */}
-          <div className="grid grid-cols-2 p-1.5 bg-slate-100 rounded-2xl gap-2">
+          {/* Toggle Switch */}
+          <div className="grid grid-cols-2 p-1.5 bg-slate-100 rounded-2xl gap-2 mb-8">
             <button
+              type="button"
               onClick={() => setIsLogin(true)}
-              className={`py-2.5 text-sm font-bold rounded-xl transition-all ${
+              className={`py-3 text-sm font-bold rounded-xl transition-all duration-300 ${
                 isLogin 
-                  ? 'bg-white text-slate-900 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
+                  ? 'bg-white text-slate-900 shadow-md shadow-slate-200 ring-1 ring-black/5' 
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'
               }`}
             >
               Sign In
             </button>
             <button
+              type="button"
               onClick={() => setIsLogin(false)}
-              className={`py-2.5 text-sm font-bold rounded-xl transition-all ${
+              className={`py-3 text-sm font-bold rounded-xl transition-all duration-300 ${
                 !isLogin 
-                  ? 'bg-white text-slate-900 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
+                  ? 'bg-white text-slate-900 shadow-md shadow-slate-200 ring-1 ring-black/5' 
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'
               }`}
             >
               Register
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             
-            {/* Register Fields */}
+            {/* Register Fields (Animated In) */}
             {!isLogin && (
-              <div className="space-y-4 animate-in slide-in-from-top-4 fade-in duration-300">
+              <div className="space-y-5 animate-in slide-in-from-top-4 fade-in duration-300">
                 <div className="relative group">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
                   <input
                     type="text"
                     placeholder="Full Name"
-                    className="w-full h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400 focus:shadow-xl focus:shadow-indigo-100/50"
+                    className="w-full h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400 focus:shadow-xl focus:shadow-indigo-100/20"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
@@ -140,8 +114,8 @@ const AuthPage = ({ onLogin }: AuthPageProps) => {
                   <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
                   <input
                     type="text"
-                    placeholder="Family Group Name"
-                    className="w-full h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400 focus:shadow-xl focus:shadow-indigo-100/50"
+                    placeholder="Group Name (e.g. Gujjari)"
+                    className="w-full h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400 focus:shadow-xl focus:shadow-indigo-100/20"
                     value={familyId}
                     onChange={(e) => setFamilyId(e.target.value)}
                     required
@@ -150,25 +124,26 @@ const AuthPage = ({ onLogin }: AuthPageProps) => {
               </div>
             )}
 
-            {/* Common Fields */}
+            {/* Email Field */}
             <div className="relative group">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
               <input
                 type="email"
                 placeholder="Email Address"
-                className="w-full h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400 focus:shadow-xl focus:shadow-indigo-100/50"
+                className="w-full h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400 focus:shadow-xl focus:shadow-indigo-100/20"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
 
+            {/* Password Field */}
             <div className="relative group">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
               <input
                 type="password"
                 placeholder="Password"
-                className="w-full h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400 focus:shadow-xl focus:shadow-indigo-100/50"
+                className="w-full h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400 focus:shadow-xl focus:shadow-indigo-100/20"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -180,7 +155,7 @@ const AuthPage = ({ onLogin }: AuthPageProps) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-14 bg-slate-900 hover:bg-black text-white rounded-2xl font-bold transition-all shadow-xl shadow-slate-200 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.98] mt-4 group"
+              className="w-full h-14 bg-slate-900 hover:bg-black text-white rounded-2xl font-bold transition-all shadow-xl shadow-slate-900/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.98] mt-6 group"
             >
               {loading ? (
                 <Loader2 className="animate-spin" />
