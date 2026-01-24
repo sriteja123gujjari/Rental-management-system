@@ -1,19 +1,18 @@
 import React, { useState } from 'react';
-import { api } from '../services/api'; // Ensure this path is correct
-import { LogIn, UserPlus, Building2, Loader2, Mail, Lock, User } from 'lucide-react';
+import { api } from '../services/api'; 
+import { User, Mail, Lock, LogIn, UserPlus, Building2, Loader2, Users } from 'lucide-react';
 
-interface AuthPageProps {
-  onLogin: (user: any, token: string) => void;
-}
-
-const AuthPage = ({ onLogin }: AuthPageProps) => {
+const AuthPage = ({ onLogin }: { onLogin: (user: any, token: string) => void }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
-  
+
   // Form State
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  
+  // ✅ NEW STATE: Family ID
+  const [familyId, setFamilyId] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,98 +20,104 @@ const AuthPage = ({ onLogin }: AuthPageProps) => {
 
     try {
       if (isLogin) {
-        // --- LOGIN LOGIC ---
-        console.log("Logging in with:", { email, password });
-        
-        // ✅ FIX: Pass as an OBJECT { }
-        const user = await api.login({ 
-            email: email, 
-            password: password 
-        });
-        
-        onLogin(user, 'session-token'); // Update App state
+        // --- LOGIN ---
+        console.log("Logging in...", { email });
+        const user = await api.login({ email, password });
+        onLogin(user, 'session-token');
 
       } else {
-        // --- REGISTER LOGIC ---
-        console.log("Registering:", { name, email, password });
+        // --- REGISTER ---
+        console.log("Registering...", { name, email, familyId });
 
-        // ✅ FIX: Pass as an OBJECT { }
         await api.register({ 
             name: name, 
             email: email, 
-            password: password 
+            password: password,
+            familyId: familyId // ✅ PASSING THE INPUT VALUE
         });
 
-        alert("Registration Successful! Please check your email.");
-        setIsLogin(true); // Switch to login view
+        alert("Registration Successful! Signing you in...");
+        const user = await api.login({ email, password });
+        onLogin(user, 'session-token');
       }
     } catch (err: any) {
       console.error("Auth Error:", err);
-      alert(err.message || "Authentication failed");
+      alert(err.message || "Authentication failed.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
-      <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl shadow-indigo-100/50 overflow-hidden border border-slate-100">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden border border-gray-100">
         
-        {/* Header Section */}
-        <div className="bg-slate-900 p-8 text-center relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-600/20 to-purple-600/20 z-0"></div>
-          <div className="relative z-10">
-            <div className="inline-flex p-3 bg-white/10 backdrop-blur-md rounded-2xl text-white mb-4 shadow-lg ring-1 ring-white/20">
-              <Building2 size={32} />
-            </div>
-            <h1 className="text-3xl font-black text-white tracking-tight">
-              {isLogin ? 'Welcome Back' : 'Join Us'}
-            </h1>
-            <p className="text-slate-400 text-sm font-medium mt-2">
-              {isLogin ? 'Manage your rentals with ease' : 'Create your rental dashboard'}
-            </p>
+        {/* Header */}
+        <div className="bg-slate-900 p-8 text-center">
+          <div className="inline-flex p-3 bg-white/10 rounded-xl text-white mb-4 backdrop-blur-sm">
+            <Building2 size={32} />
           </div>
+          <h1 className="text-2xl font-bold text-white">
+            {isLogin ? 'Welcome Back' : 'Create Account'}
+          </h1>
         </div>
 
-        {/* Form Section */}
+        {/* Form */}
         <div className="p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             
-            {/* Name Field (Only for Register) */}
+            {/* REGISTER FIELDS */}
             {!isLogin && (
-              <div className="relative group">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
-                <input
-                  type="text"
-                  placeholder="Full Name"
-                  className="w-full h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required={!isLogin}
-                />
-              </div>
+              <>
+                {/* Full Name */}
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                  <input
+                    type="text"
+                    placeholder="Full Name"
+                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 font-bold text-slate-700"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* Family / Group Name Input */}
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                  <input
+                    type="text"
+                    placeholder="Family Group Name (e.g. Gujjari)"
+                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 font-bold text-slate-700"
+                    value={familyId}
+                    onChange={(e) => setFamilyId(e.target.value)}
+                    required
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1 ml-1">This ID links all your family members together.</p>
+                </div>
+              </>
             )}
 
-            {/* Email Field */}
-            <div className="relative group">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
+            {/* Email (Login & Register) */}
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="email"
                 placeholder="Email Address"
-                className="w-full h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400"
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 font-bold text-slate-700"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
 
-            {/* Password Field */}
-            <div className="relative group">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
+            {/* Password (Login & Register) */}
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="password"
                 placeholder="Password"
-                className="w-full h-14 pl-12 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400"
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 font-bold text-slate-700"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -120,38 +125,21 @@ const AuthPage = ({ onLogin }: AuthPageProps) => {
               />
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition-all shadow-xl shadow-indigo-200 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-95 mt-2"
+              className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 mt-2 shadow-lg shadow-slate-200 disabled:opacity-70"
             >
-              {loading ? (
-                <Loader2 className="animate-spin" />
-              ) : isLogin ? (
-                <><LogIn size={20} /> Login</>
-              ) : (
-                <><UserPlus size={20} /> Create Account</>
-              )}
+              {loading ? <Loader2 className="animate-spin" /> : (isLogin ? <><LogIn size={20} /> Sign In</> : <><UserPlus size={20} /> Sign Up</>)}
             </button>
           </form>
 
-          {/* Toggle Login/Register */}
           <div className="mt-6 text-center">
             <button
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setName('');
-                setEmail('');
-                setPassword('');
-              }}
-              className="text-slate-500 text-sm font-semibold hover:text-indigo-600 transition-colors"
+              onClick={() => setIsLogin(!isLogin)}
+              className="text-slate-500 text-sm font-semibold hover:text-indigo-600"
             >
-              {isLogin ? (
-                <>Don't have an account? <span className="text-indigo-600 font-bold underline">Sign Up</span></>
-              ) : (
-                <>Already have an account? <span className="text-indigo-600 font-bold underline">Log In</span></>
-              )}
+              {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Log In"}
             </button>
           </div>
         </div>
