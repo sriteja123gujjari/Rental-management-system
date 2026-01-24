@@ -32,19 +32,24 @@ export const api = {
   //  1. AUTHENTICATION (THIS WAS MISSING)
   // ==========================================
 
-  // Register New User
-  async register(userData: { email: string; password: string; name: string }) {
+ // src/services/api.ts
+
+  // Update the register function signature
+  async register(userData: { email: string; password: string; name: string; familyId: string }) {
     console.log("API: Registering...", userData); 
 
-    if (!userData.email || !userData.password) {
-      throw new Error("Email and Password are required.");
+    if (!userData.email || !userData.password || !userData.familyId) {
+      throw new Error("Email, Password, and Family Group are required.");
     }
 
     const { data, error } = await supabase.auth.signUp({
       email: userData.email,
       password: userData.password,
       options: {
-        data: { full_name: userData.name, family_id: 'Gujjari' } // Store name in metadata
+        data: { 
+            full_name: userData.name, 
+            family_id: userData.familyId //  NOW DYNAMIC (Saved to Database)
+        }
       }
     });
 
