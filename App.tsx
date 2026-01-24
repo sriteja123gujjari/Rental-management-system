@@ -1,7 +1,8 @@
+// src/App.tsx
 import React, { useState, useEffect } from 'react';
-import AuthPage from './components/AuthPage';
-import Dashboard from './pages/Dashboard'; // Ensure this points to your Dashboard file
 import { supabase } from './services/api';
+import AuthPage from './components/AuthPage'; // ✅ Ensure this path matches where you put AuthPage
+import Dashboard from './components/Dashboard';     // ✅ Ensure this path matches where you put Dashboard
 import { Loader2 } from 'lucide-react';
 
 const App = () => {
@@ -9,13 +10,13 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check Active Session
+    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for Auth Changes
+    // Listen for changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
@@ -30,7 +31,7 @@ const App = () => {
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="animate-spin text-slate-900" size={48} />
+        <Loader2 className="animate-spin text-indigo-600" size={48} />
       </div>
     );
   }
@@ -40,6 +41,8 @@ const App = () => {
       {user ? (
         <Dashboard user={user} onLogout={handleLogout} />
       ) : (
+        // We pass a dummy function because AuthPage handles the logic internally now,
+        // but we still update the user state here just in case.
         <AuthPage onLogin={(user) => setUser(user)} />
       )}
     </div>
