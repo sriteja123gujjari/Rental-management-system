@@ -1,7 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
+// 1. Initialize Supabase
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase URL or Key in .env file');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -22,15 +27,31 @@ const getPreviousMonth = (currentMonth: string) => {
 };
 
 export const api = {
-  // --- 1. AUTHENTICATION (MOVED TO TOP LEVEL) ---
-  // This fixes the "ha.login is not a function" error
-  async login(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+
+  // --- 1. AUTHENTICATION ---
+
+  // ✅ FIXED: Added register function
+  async register(userData: { email: string; password: string; name: string }) {
+    // 1. Create User in Supabase Auth
+    const { data, error } = await supabase.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+      options: {
+        data: { full_name: userData.name, family_id: 'Gujjari' } // Store extra data in metadata
+      }
     });
+
     if (error) throw error;
     return data;
+  },
+
+  async login(credentials: { email: string; password: string }) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: credentials.email,
+      password: credentials.password,
+    });
+    if (error) throw error;
+    return { ...data.user, familyId: data.user?.user_metadata?.family_id };
   },
 
   async logout() {
@@ -38,16 +59,31 @@ export const api = {
     if (error) throw error;
   },
 
-  // --- 2. FETCH DATA ---
+  // --- 2. DASHBOARD DATA ---
+
   async fetchMonthData(month: string) {
-    const { data: shops } = await supabase.from('shops').select('*').eq('month', month);
-    const { data: rentRecords } = await supabase.from('rent_records').select('*').eq('month', month);
-    const { data: expenses } = await supabase.from('expenses').select('*').eq('month', month);
-    return { shops, rentRecords, expenses };
+    // Run 3 queries in parallel for speed
+    const [shopsRes, recordsRes, expensesRes] = await Promise.all([
+      supabase.from('shops').select('*').eq('month', month),
+      supabase.from('rent_records').select('*').eq('month', month),
+      supabase.from('expenses').select('*').eq('month', month)
+    ]);
+
+    if (shopsRes.error) throw shopsRes.error;
+    if (recordsRes.error) throw recordsRes.error;
+    if (expensesRes.error) throw expensesRes.error;
+
+    return { 
+      shops: shopsRes.data || [], 
+      rentRecords: recordsRes.data || [], 
+      expenses: expensesRes.data || [] 
+    };
   },
 
-  // --- 3. FETCH ARREARS (Recursive) ---
+  // --- 3. SMART ARREARS CALCULATION (Recursive) ---
+  
   async fetchArrears(currentMonth: string, depth = 0): Promise<Record<string, number>> {
+    // Stop if we went back 6 months to prevent infinite loading
     if (depth > 6) return {};
 
     const prevMonth = getPreviousMonth(currentMonth);
@@ -55,7 +91,7 @@ export const api = {
     // Get shops from previous month
     const { data: shops } = await supabase.from('shops').select('*').eq('month', prevMonth);
     
-    // If no shops existed last month, there's no debt to calculate
+    // If no shops existed last month, there is no debt to carry over
     if (!shops || shops.length === 0) return {};
 
     // Get payments from previous month
@@ -70,12 +106,13 @@ export const api = {
       const record = prevRecords?.find(r => r.shop_id === shop.id);
       const paid = record ? record.amount_paid : 0;
       
-      // Get debt from the past
+      // Get debt from the past (Recursion result)
       const debtFromPast = prevPrevArrears[shop.name] || 0;
 
       // FORMULA: (Rent + Old Debt) - Paid Amount
       const due = (shop.base_rent + debtFromPast) - paid;
       
+      // Only add to map if there is actual debt
       if (due > 0) {
         arrearsMap[shop.name] = due; 
       }
@@ -84,8 +121,10 @@ export const api = {
     return arrearsMap;
   },
 
-  // --- 4. SAVE PAYMENT ---
+  // --- 4. ACTIONS (Rent, Shops, Expenses) ---
+
   async toggleRent(month: string, shopId: string, amount: number, collector: string) {
+    // Check if record exists
     const { data: existing } = await supabase
       .from('rent_records')
       .select('*')
@@ -94,13 +133,16 @@ export const api = {
       .single();
 
     if (amount <= 0 && existing) {
+      // DELETE if amount is 0
       await supabase.from('rent_records').delete().eq('id', existing.id);
     } else if (existing) {
+      // UPDATE if exists
       await supabase.from('rent_records').update({
         amount_paid: amount,
         collected_by: collector
       }).eq('id', existing.id);
     } else if (amount > 0) {
+      // INSERT if new
       await supabase.from('rent_records').insert([{
         month,
         shop_id: shopId,
@@ -111,38 +153,40 @@ export const api = {
       }]);
     }
 
+    // Return updated records for UI refresh
     const { data: rentRecords } = await supabase.from('rent_records').select('*').eq('month', month);
-    return { rentRecords };
+    return { rentRecords: rentRecords || [] };
   },
 
-  // --- 5. SHOP MANAGEMENT ---
   async addShop(month: string, shop: { name: string; baseRent: number }) {
     await supabase.from('shops').insert([{ 
-        month, name: shop.name, base_rent: shop.baseRent, family_id: 'Gujjari' 
+        month, 
+        name: shop.name, 
+        base_rent: shop.baseRent, 
+        family_id: 'Gujjari' 
     }]);
   },
 
   async updateShop(month: string, id: string, updates: { name: string; baseRent: number }) {
-    await supabase.from('shops').update({ name: updates.name, base_rent: updates.baseRent })
-      .eq('month', month).eq('id', id);
+    await supabase.from('shops').update({ 
+      name: updates.name, 
+      base_rent: updates.baseRent 
+    }).eq('month', month).eq('id', id);
   },
 
   async deleteShop(month: string, id: string) {
+    // Delete related records first (Foreign Key constraint)
     await supabase.from('rent_records').delete().eq('month', month).eq('shop_id', id);
     await supabase.from('shops').delete().eq('month', month).eq('id', id);
   },
 
-  async updateRentRecord(month: string, shopId: string, updates: any) {
-    await supabase.from('rent_records').update({ collected_by: updates.collectedBy })
-      .eq('month', month).eq('shop_id', shopId);
-    const { data: rentRecords } = await supabase.from('rent_records').select('*').eq('month', month);
-    return { rentRecords };
-  },
-
-  // --- 6. EXPENSES ---
   async addExpense(month: string, expense: any) {
     await supabase.from('expenses').insert([{
-      month, description: expense.description, amount: expense.amount, paid_by: expense.paidBy, family_id: 'Gujjari'
+      month, 
+      description: expense.description, 
+      amount: expense.amount, 
+      paid_by: expense.paidBy, 
+      family_id: 'Gujjari'
     }]);
   },
 
