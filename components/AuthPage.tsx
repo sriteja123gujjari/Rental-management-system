@@ -30,7 +30,7 @@ const AuthPage = ({ onLogin }: AuthPageProps) => {
       } else {
         // --- REGISTER ---
         await api.register({ name, email, password, familyId });
-        alert("Registration Successful! Logging you in...");
+        //alert("Registration Successful! Logging you in...");
         await api.login({ email, password }).then(user => onLogin(user, 'token'));
       }
     } catch (err: any) {
