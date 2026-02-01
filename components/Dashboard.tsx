@@ -168,8 +168,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
 
   // --- HANDLERS ---
   const handleSettleUp = async () => {
-    if (!confirm("MARK ALL AS SETTLED?\n\n- The Settlement Plan below will reset to 0.\n- The Total Stats above will remain unchanged.\n- Only NEW transactions will appear in the plan.")) return;
-    
+    // Removed Confirm Alert
     setSubmitting(true);
     try {
         await api.settleUp(currentMonth, familyId);
@@ -203,11 +202,11 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
       const res = await api.toggleRent(currentMonth, selectedShop.id, Number(paymentAmount), paymentCollector, familyId);
       setRecords(res.rentRecords);
       setPaymentModalOpen(false); setSelectedShop(null);
-    } catch (err) { console.error("Payment failed", err); console.error("Failed to save payment"); } finally { setSubmitting(false); }
+    } catch (err) { console.error("Payment failed", err); } finally { setSubmitting(false); }
   };
 
   const clearPayment = async (shopId: string) => {
-    if(!confirm("Are you sure you want to clear this payment?")) return;
+    // Removed Confirm Alert
     setProcessingId(shopId);
     try {
       const res = await api.toggleRent(currentMonth, shopId, 0, MEMBERS[0], familyId); 
