@@ -14,6 +14,12 @@ interface Expense { id: string; description: string; amount: number; paid_by: st
 
 // --- CONSTANTS ---
 const MEMBERS = ['Srinivas', 'Anjaneyulu', 'Goutham'];
+const MEMBER_UPI_DATA: Record<string, string> = {
+  'Anjaneyulu': 'anjaneyulu@oksbi', 
+  'Srinivas': 'srinivas@okaxis', 
+  'Goutham': 'goutham@okicici'
+};
+
 const DEFAULT_SHOPS_DATA = [
   { name: 'Shaam Home', baseRent: 63000 },
   { name: 'Medical Shop', baseRent: 60000 },
@@ -81,7 +87,6 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
   const monthlyData = useMemo(() => {
     
     // --- PART 1: TOTAL STATS (Includes Settled & Unsettled) ---
-    // This ensures the top cards ALWAYS show the full month's history
     const totalReceived = records
       .filter((r) => r.status === 'Paid')
       .reduce((sum, r) => sum + Number(r.amount_paid || 0), 0);
@@ -91,11 +96,10 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
     const share = net / 3;
 
     // --- PART 2: SETTLEMENT LOGIC (Only Unsettled Items) ---
-    // This ensures the "Settlement Plan" goes to 0 when you click Settle
     const activeRecords = records.filter(r => !r.is_settled);
     const activeExpenses = expenses.filter(e => !e.is_settled);
 
-    // Calculate the "Active Pot" (Money waiting to be split)
+    // Calculate the "Active Pot"
     const activeReceived = activeRecords
         .filter(r => r.status === 'Paid')
         .reduce((sum, r) => sum + Number(r.amount_paid || 0), 0);
@@ -121,7 +125,6 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
 
     const settlements = MEMBERS.map(member => {
       const holding = memberBalances[member];
-      // Compare what they hold vs what they SHOULD hold from the active pot
       const balance = holding - activeSplit; 
       return { member, holding, balance };
     });
@@ -149,12 +152,10 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
     }
 
     return { 
-        // Stats use TOTALS
         received: totalReceived, 
         totalExpenses: totalExpensesAmount, 
         net: net, 
         split: share, 
-        // Settlement uses ACTIVE only
         settlements, 
         transactions 
     };
@@ -162,7 +163,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
 
   // --- HANDLERS ---
   const handleSettleUp = async () => {
-    // Removed Confirm Alert
+    // No alert, just action
     setSubmitting(true);
     try {
         await api.settleUp(currentMonth, familyId);
@@ -200,7 +201,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
   };
 
   const clearPayment = async (shopId: string) => {
-    // Removed Confirm Alert
+    // No alert, just action
     setProcessingId(shopId);
     try {
       const res = await api.toggleRent(currentMonth, shopId, 0, MEMBERS[0], familyId); 
@@ -322,10 +323,25 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
                         </div>
                     </>
                 ) : (
-                    <div className="text-center py-4">
-                        <div className="inline-flex p-3 bg-white rounded-full mb-3 shadow-sm text-emerald-500"><CheckCircle2 size={24} /></div>
-                        <h3 className="font-bold text-slate-800">All Caught Up!</h3>
-                        <p className="text-xs text-slate-400 mt-1">No pending settlements based on current activity.</p>
+                    // ✅ NEW ZERO STATE: SHOW ROWS WITH 0 VALUES
+                    <div className="relative z-10">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-slate-400">
+                                <span className="p-1 bg-slate-100 rounded-lg"><ArrowRightLeft size={14} className="text-slate-400" /></span>Settlement Plan
+                            </h2>
+                        </div>
+                        <div className="grid gap-3">
+                            {MEMBERS.map((member, idx) => (
+                                <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+                                    <div className="flex items-center gap-3 w-full sm:w-auto justify-center">
+                                        <div className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg font-bold text-xs uppercase w-28 text-center">{member}</div>
+                                        <span className="text-slate-300 text-[10px] font-bold">OWES</span>
+                                        <div className="bg-slate-100 text-slate-400 px-3 py-1.5 rounded-lg font-bold text-xs uppercase w-28 text-center">-</div>
+                                    </div>
+                                    <div className="font-black text-xl font-mono tracking-tight text-slate-300">₹0</div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
             </section>
