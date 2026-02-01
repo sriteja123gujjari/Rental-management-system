@@ -14,12 +14,6 @@ interface Expense { id: string; description: string; amount: number; paid_by: st
 
 // --- CONSTANTS ---
 const MEMBERS = ['Srinivas', 'Anjaneyulu', 'Goutham'];
-const MEMBER_UPI_DATA: Record<string, string> = {
-  'Anjaneyulu': 'anjaneyulu@oksbi', 
-  'Srinivas': 'srinivas@okaxis', 
-  'Goutham': 'goutham@okicici'
-};
-
 const DEFAULT_SHOPS_DATA = [
   { name: 'Shaam Home', baseRent: 63000 },
   { name: 'Medical Shop', baseRent: 60000 },
