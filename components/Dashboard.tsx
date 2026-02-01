@@ -14,11 +14,6 @@ interface Expense { id: string; description: string; amount: number; paid_by: st
 
 // --- CONSTANTS ---
 const MEMBERS = ['Srinivas', 'Anjaneyulu', 'Goutham'];
-const MEMBER_UPI_DATA: Record<string, string> = {
-  'Anjaneyulu': 'anjaneyulu@oksbi', 
-  'Srinivas': 'srinivas@okaxis', 
-  'Goutham': 'goutham@okicici'
-};
 
 const DEFAULT_SHOPS_DATA = [
   { name: 'Shaam Home', baseRent: 63000 },
@@ -83,10 +78,10 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
     refreshData(false);
   }, [currentMonth, familyId]);
 
-  // --- CALCULATIONS (FIXED LOGIC) ---
+  // --- CALCULATIONS ---
   const monthlyData = useMemo(() => {
     
-    // --- PART 1: TOTAL STATS (Includes Settled & Unsettled) ---
+    // --- PART 1: TOTAL STATS ---
     const totalReceived = records
       .filter((r) => r.status === 'Paid')
       .reduce((sum, r) => sum + Number(r.amount_paid || 0), 0);
@@ -95,11 +90,10 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
     const net = totalReceived - totalExpensesAmount;
     const share = net / 3;
 
-    // --- PART 2: SETTLEMENT LOGIC (Only Unsettled Items) ---
+    // --- PART 2: SETTLEMENT LOGIC ---
     const activeRecords = records.filter(r => !r.is_settled);
     const activeExpenses = expenses.filter(e => !e.is_settled);
 
-    // Calculate the "Active Pot"
     const activeReceived = activeRecords
         .filter(r => r.status === 'Paid')
         .reduce((sum, r) => sum + Number(r.amount_paid || 0), 0);
@@ -107,7 +101,6 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
     const activeNet = activeReceived - activeExpenseTotal;
     const activeSplit = activeNet / 3;
 
-    // Calculate Member Balances based on ACTIVE items only
     const memberBalances: Record<string, number> = {};
     MEMBERS.forEach(m => memberBalances[m] = 0);
 
@@ -163,7 +156,6 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
 
   // --- HANDLERS ---
   const handleSettleUp = async () => {
-    // No alert, just action
     setSubmitting(true);
     try {
         await api.settleUp(currentMonth, familyId);
@@ -201,7 +193,6 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
   };
 
   const clearPayment = async (shopId: string) => {
-    // No alert, just action
     setProcessingId(shopId);
     try {
       const res = await api.toggleRent(currentMonth, shopId, 0, MEMBERS[0], familyId); 
@@ -288,62 +279,59 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
             
-            {/* SETTLEMENT PLAN */}
-            <section className={`rounded-[2rem] p-6 sm:p-8 relative overflow-hidden transition-all ${monthlyData.transactions.length > 0 ? 'bg-slate-900 shadow-2xl shadow-indigo-900/20 text-white' : 'bg-slate-50 border border-slate-200 text-slate-600'}`}>
-                {monthlyData.transactions.length > 0 ? (
-                    <>
-                        <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none"><ArrowRightLeft size={180} /></div>
-                        <div className="relative z-10">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-slate-400">
-                                    <span className="p-1 bg-indigo-500/20 rounded-lg"><ArrowRightLeft size={14} className="text-indigo-400" /></span>Settlement Plan
-                                </h2>
-                                {/* ✅ MASTER SETTLE BUTTON */}
-                                <button 
-                                    onClick={handleSettleUp}
-                                    disabled={submitting}
-                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
-                                >
-                                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} strokeWidth={3} />}
-                                    Mark All Settled
-                                </button>
-                            </div>
-                            <div className="grid gap-3">
-                            {monthlyData.transactions.map((t: any, idx) => (
+            {/* SETTLEMENT PLAN (ALWAYS DARK MODE) */}
+            <section className="bg-slate-900 rounded-[2rem] shadow-2xl shadow-indigo-900/20 p-6 sm:p-8 text-white relative overflow-hidden transition-all">
+                {/* Background Art */}
+                <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none"><ArrowRightLeft size={180} /></div>
+                
+                <div className="relative z-10">
+                    {/* Header with Button */}
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-slate-400">
+                            <span className="p-1 bg-indigo-500/20 rounded-lg"><ArrowRightLeft size={14} className="text-indigo-400" /></span>Settlement Plan
+                        </h2>
+                        {/* MASTER SETTLE BUTTON */}
+                        {monthlyData.transactions.length > 0 && (
+                            <button 
+                                onClick={handleSettleUp}
+                                disabled={submitting}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
+                            >
+                                {submitting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} strokeWidth={3} />}
+                                Mark All Settled
+                            </button>
+                        )}
+                    </div>
+
+                    {/* CONTENT AREA */}
+                    <div className="grid gap-3">
+                        {monthlyData.transactions.length > 0 ? (
+                            // ACTIVE TRANSACTIONS
+                            monthlyData.transactions.map((t: any, idx) => (
                                 <div onClick={() => handleSettlePayment(t.to, t.amount)} key={idx} className="cursor-pointer bg-white/5 backdrop-blur-md rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between border border-white/5 gap-3 hover:bg-white/10 transition-colors">
                                     <div className="flex items-center gap-3 w-full sm:w-auto justify-center">
                                         <div className="bg-rose-500/20 text-rose-300 px-3 py-1.5 rounded-lg font-bold text-xs uppercase w-28 text-center">{t.from}</div>
-                                        <span className="text-white/40 text-[10px] font-bold">OWES</span>
+                                        <span className="text-white/40 text-[10px] font-bold">PAYS</span>
                                         <div className="bg-emerald-500/20 text-emerald-300 px-3 py-1.5 rounded-lg font-bold text-xs uppercase w-28 text-center">{t.to}</div>
                                     </div>
                                     <div className="font-black text-xl font-mono tracking-tight">₹{formatCurrency(t.amount)}</div>
                                 </div>
-                            ))}
-                            </div>
-                        </div>
-                    </>
-                ) : (
-                    // ✅ NEW ZERO STATE: SHOW ROWS WITH 0 VALUES
-                    <div className="relative z-10">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-slate-400">
-                                <span className="p-1 bg-slate-100 rounded-lg"><ArrowRightLeft size={14} className="text-slate-400" /></span>Settlement Plan
-                            </h2>
-                        </div>
-                        <div className="grid gap-3">
-                            {MEMBERS.map((member, idx) => (
-                                <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+                            ))
+                        ) : (
+                            // ZERO STATE (Looks exactly like rows)
+                            MEMBERS.map((member, idx) => (
+                                <div key={idx} className="bg-white/5 backdrop-blur-md rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between border border-white/5 gap-3 opacity-50">
                                     <div className="flex items-center gap-3 w-full sm:w-auto justify-center">
-                                        <div className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg font-bold text-xs uppercase w-28 text-center">{member}</div>
-                                        <span className="text-slate-300 text-[10px] font-bold">OWES</span>
-                                        <div className="bg-slate-100 text-slate-400 px-3 py-1.5 rounded-lg font-bold text-xs uppercase w-28 text-center">-</div>
+                                        <div className="bg-white/10 text-slate-300 px-3 py-1.5 rounded-lg font-bold text-xs uppercase w-28 text-center">{member}</div>
+                                        <span className="text-white/40 text-[10px] font-bold">PAYS</span>
+                                        <div className="bg-white/10 text-slate-300 px-3 py-1.5 rounded-lg font-bold text-xs uppercase w-28 text-center">-</div>
                                     </div>
-                                    <div className="font-black text-xl font-mono tracking-tight text-slate-300">₹0</div>
+                                    <div className="font-black text-xl font-mono tracking-tight text-white/30">₹0</div>
                                 </div>
-                            ))}
-                        </div>
+                            ))
+                        )}
                     </div>
-                )}
+                </div>
             </section>
 
             {/* SHOP STATUS */}
