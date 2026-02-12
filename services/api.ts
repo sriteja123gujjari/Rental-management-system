@@ -83,31 +83,54 @@ export const api = {
     };
   },
 
-  async fetchArrears(currentMonth: string, familyId: string, depth = 0): Promise<Record<string, number>> {
-    if (depth > 6) return {};
-    const prevMonth = getPreviousMonth(currentMonth);
-    
-    // We use the same "smart fetch" logic here to ensure arrears calculation sees all shops
-    const { shops, rentRecords } = await this.fetchMonthData(prevMonth, familyId);
-    
-    if (!shops || shops.length === 0) return {};
+  async fetchArrears(currentMonth: string, familyId: string) {
+      try {
+        // 1. Get ALL shops from the past (Before this month)
+        const { data: pastShops } = await supabase
+          .from('shops')
+          .select('id, name, base_rent, month')
+          .eq('family_id', familyId)
+          .lt('month', currentMonth); // 'lt' means Less Than (older months)
 
-    const prevPrevArrears = await this.fetchArrears(prevMonth, familyId, depth + 1);
+        // 2. Get ALL payments from the past
+        const { data: pastPayments } = await supabase
+          .from('rent_records')
+          .select('shop_id, amount_paid, month')
+          .eq('family_id', familyId)
+          .lt('month', currentMonth);
 
-    const arrearsMap: Record<string, number> = {};
-    shops.forEach(shop => {
-      const record = rentRecords?.find(r => r.shop_id === shop.id);
-      
-      // If a record is marked as settled, it clears the debt history for that shop
-      if (record?.is_settled) return; 
+        if (!pastShops || !pastPayments) return {};
 
-      const paid = record ? record.amount_paid : 0;
-      const debtFromPast = prevPrevArrears[shop.name] || 0;
-      const due = (shop.base_rent + debtFromPast) - paid;
-      if (due > 0) arrearsMap[shop.name] = due; 
-    });
-    return arrearsMap;
-  },
+        // 3. The Math: Calculate Balance per Shop Name
+        const arrearsMap: Record<string, number> = {};
+
+        // Step A: Add up all Rent that SHOULD have been paid
+        pastShops.forEach((shop) => {
+            if (!arrearsMap[shop.name]) arrearsMap[shop.name] = 0;
+            arrearsMap[shop.name] += Number(shop.base_rent);
+        });
+
+        // Step B: Subtract all Rent that WAS paid
+        pastPayments.forEach((payment) => {
+            // Find the shop name associated with this payment ID
+            const originalShop = pastShops.find(s => s.id === payment.shop_id);
+            if (originalShop && originalShop.name) {
+                arrearsMap[originalShop.name] -= Number(payment.amount_paid);
+            }
+        });
+
+        // Step C: Clean up (Remove negatives or zeros)
+        // If they paid extra, we don't count it as arrears (optional)
+        Object.keys(arrearsMap).forEach(key => {
+            if (arrearsMap[key] <= 0) delete arrearsMap[key];
+        });
+
+        return arrearsMap; // Returns { "Besmile": 10000, "Gym": 5000 }
+      } catch (err) {
+        console.error("Error calculating arrears:", err);
+        return {};
+      }
+    },
 
   // --- SETTLEMENT ACTION ---
   async settleUp(month: string, familyId: string) {
