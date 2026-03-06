@@ -36,6 +36,18 @@ export const api = {
 
   async logout() { await supabase.auth.signOut(); },
 
+  // ✅ FIXED: signInWithGoogle was missing — now added
+  async signInWithGoogle() {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin, // Auto-detects localhost or deployed URL
+      },
+    });
+    if (error) throw error;
+    return data;
+  },
+
   // --- DATA FETCHING (FIXED GHOST SHOPS) ---
   async fetchMonthData(month: string, familyId: string) {
     // 1. Fetch Records First
@@ -120,12 +132,11 @@ export const api = {
         });
 
         // Step C: Clean up (Remove negatives or zeros)
-        // If they paid extra, we don't count it as arrears (optional)
         Object.keys(arrearsMap).forEach(key => {
             if (arrearsMap[key] <= 0) delete arrearsMap[key];
         });
 
-        return arrearsMap; // Returns { "Besmile": 10000, "Gym": 5000 }
+        return arrearsMap;
       } catch (err) {
         console.error("Error calculating arrears:", err);
         return {};
