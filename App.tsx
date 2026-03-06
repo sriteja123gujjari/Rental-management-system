@@ -1,31 +1,57 @@
-// src/App.tsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from './services/api';
-import AuthPage from './components/AuthPage'; // ✅ Ensure this path matches where you put AuthPage
-import Dashboard from './components/Dashboard';     // ✅ Ensure this path matches where you put Dashboard
+import AuthPage from './components/AuthPage';
+import Dashboard from './components/Dashboard';
 import { Loader2 } from 'lucide-react';
 
 const App = () => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [logoutKey, setLogoutKey] = useState(0);
 
   useEffect(() => {
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    // ✅ Register listener FIRST before getSession
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('AUTH EVENT:', event, '| USER:', session?.user?.email ?? 'null');
+
+      if (event === 'SIGNED_OUT') {
+        // ✅ Clean URL completely
+        window.history.replaceState({}, '', window.location.pathname);
+        setUser(null);
+        setLoading(false);
+        setLogoutKey(prev => prev + 1);
+        return;
+      }
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        // ✅ Only set user if we actually have one
+        if (session?.user) {
+          // ✅ Clean URL after OAuth redirect
+          window.history.replaceState({}, '', window.location.pathname);
+          setUser(session.user);
+        } else {
+          setUser(null);
+        }
+        setLoading(false);
+      }
+    });
+
+    // ✅ Fallback: if no auth event fires within 2 seconds, stop loading
+    const timeout = setTimeout(() => {
       setLoading(false);
-    });
+    }, 2000);
 
-    // Listen for changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    // ✅ Full page reload — guarantees AuthPage remounts 100% fresh
+    // with Google button visible, no stale state from previous session
+    window.location.href = window.location.pathname;
   };
 
   if (loading) {
@@ -41,9 +67,7 @@ const App = () => {
       {user ? (
         <Dashboard user={user} onLogout={handleLogout} />
       ) : (
-        // We pass a dummy function because AuthPage handles the logic internally now,
-        // but we still update the user state here just in case.
-        <AuthPage onLogin={(user) => setUser(user)} />
+        <AuthPage key={`auth-${logoutKey}`} onLogin={(u) => setUser(u)} />
       )}
     </div>
   );
