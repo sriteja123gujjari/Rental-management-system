@@ -1,36 +1,36 @@
-# Rental Management System
+# 🏠 Rental Management System
 
-I built this app to solve a practical problem: keeping track of rent collection, shared expenses, and peer-to-peer debts across multiple family-owned properties. 
+> Built to solve a real family problem — managing rent collection 
+> and shared expenses across multiple shops without errors.
 
-It's a web application built with React and Supabase, wrapped into a native Android APK using Capacitor.
+🌐 **Live Demo:** https://rental-management-system-five.vercel.app  
+📱 **Android APK:** [Download v1.0](link-to-your-apk-in-releases)
 
-## What it does
+---
 
-* **Smart Settlements:** At the end of the month, the app calculates the total pot (rent minus expenses), splits it equally, and figures out exactly who needs to pay whom to balance the books. 
-* **Preserves History:** When you hit "Settle Up", it clears the active debts but keeps the underlying payment records intact so your "Total Revenue" history is never lost.
-* **Arrears Tracking:** It looks at historical database records to automatically flag if a property missed rent in previous months.
-* **Failsafe Data ("Ghost Shops"):** If a property is sold or deleted from the system, its historical payment records still render correctly in past months.
-* **Modern UI:** Built with Tailwind CSS utilizing a frosted-glass (glassmorphism) design.
-* **Export & Share:** Generates PDF reports that can be shared directly via WhatsApp.
+## The Problem
+My family owns multiple rented shops. We tracked everything manually 
+in notebooks — leading to calculation errors when splitting income 
+and expenses between 3 members. I built this to fix that.
+
+## What It Does
+- **Auto-split** — Rent and expenses divided equally among members
+- **Smart settlements** — Calculates exactly who pays whom at month end
+- **Arrears tracking** — Flags shops that missed rent in previous months
+- **Ghost Shops** — Deleted shops still show correctly in past records
+- **PDF export** — Monthly report shareable directly via WhatsApp
+- **Glassmorphism UI** — Clean frosted-glass design with Tailwind CSS
 
 ## Tech Stack
+React • TypeScript • Vite • Tailwind CSS • Supabase • Capacitor
 
-* **Frontend:** React, TypeScript, Vite
-* **Styling:** Tailwind CSS, Lucide Icons
-* **Backend:** Supabase (PostgreSQL + Auth)
-* **Mobile:** Capacitor (Android)
+## Platforms
+✅ Web — deployed on Vercel  
+✅ Android APK — built with Capacitor
 
-## Database Setup
+## Database (Supabase PostgreSQL)
+- `shops` — property details with family_id and base_rent
+- `rent_records` — monthly income with settlement tracking  
+- `expenses` — shared costs with paid_by and category
 
-The app relies on a Supabase PostgreSQL database with three main tables:
-1. `shops`: Property details (`id`, `name`, `base_rent`, `family_id`, `month`).
-2. `rent_records`: Income tracking (`id`, `shop_id`, `amount_paid`, `collected_by`, `is_settled`, `month`).
-3. `expenses`: Shared costs (`id`, `description`, `amount`, `paid_by`, `is_settled`, `month`).
-
-## Running it Locally
-
-### 1. Clone & Install
-```bash
-git clone [https://github.com/yourusername/rental-management-system.git](https://github.com/yourusername/rental-management-system.git)
-cd rental-management-system
-npm install
+## Screenshots
