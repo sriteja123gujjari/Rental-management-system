@@ -19,7 +19,8 @@ const formatCurrency = (amount: number) => {
 };
 
 const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
-  const familyId = user?.user_metadata?.family_id || 'Personal';
+  // Replace the existing line with this one to be safe
+  const familyId = user?.user_metadata?.family_id || user?.user_metadata?.familyId || 'Personal';
   const userName = user?.user_metadata?.full_name || 'User';
 
   // DATA STATES
