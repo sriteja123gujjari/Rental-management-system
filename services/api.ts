@@ -36,21 +36,48 @@ export const api = {
 
   async logout() { await supabase.auth.signOut(); },
 
-  // ✅ FIXED: signInWithGoogle was missing — now added
   async signInWithGoogle() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin, // Auto-detects localhost or deployed URL
+        redirectTo: window.location.origin, 
       },
     });
     if (error) throw error;
     return data;
   },
 
+  // --- CUSTOM DYNAMIC PARTNERS / MEMBERS ACTIONS ---
+  async fetchMembers(familyId: string) {
+    const { data, error } = await supabase
+      .from('members')
+      .select('name')
+      .eq('family_id', familyId);
+    
+    if (error) throw error;
+    return data.map(m => m.name);
+  },
+
+  async addMember(name: string, familyId: string) {
+    const { error } = await supabase
+      .from('members')
+      .insert([{ name, family_id: familyId }]);
+    
+    if (error) throw error;
+  },
+
+  async deleteMember(name: string, familyId: string) {
+    const { error } = await supabase
+      .from('members')
+      .delete()
+      .eq('family_id', familyId)
+      .eq('name', name);
+    
+    if (error) throw error;
+  },
+
   // --- DATA FETCHING (FIXED GHOST SHOPS) ---
   async fetchMonthData(month: string, familyId: string) {
-    // 1. Fetch Records First
     const [recordsRes, expensesRes] = await Promise.all([
       supabase.from('rent_records').select('*').eq('month', month).eq('family_id', familyId),
       supabase.from('expenses').select('*').eq('month', month).eq('family_id', familyId)
@@ -59,25 +86,19 @@ export const api = {
     const rentRecords = recordsRes.data || [];
     const expenses = expensesRes.data || [];
 
-    // 2. Fetch Shops explicitly assigned to this month
     const { data: monthlyShops } = await supabase.from('shops').select('*').eq('month', month).eq('family_id', familyId);
     
     let allShops = monthlyShops || [];
 
-    // 3. 🛠️ FIX: Find "Ghost Shops" 
-    // (Shops that have rent paid this month, but were created in a different month)
     if (rentRecords.length > 0) {
         const recordShopIds = rentRecords.map(r => r.shop_id);
         const currentShopIds = new Set(allShops.map(s => s.id));
         
-        // Find IDs in records that are NOT in the current shop list
         const missingIds = recordShopIds.filter(id => !currentShopIds.has(id));
         
         if (missingIds.length > 0) {
-            // Fetch these specific missing shops (ignoring month filter)
             const { data: ghostShops } = await supabase.from('shops').select('*').in('id', missingIds);
             if (ghostShops) {
-                // Remove duplicates by name to prevent double showing
                 const existingNames = new Set(allShops.map(s => s.name));
                 const uniqueGhosts = ghostShops.filter(g => !existingNames.has(g.name));
                 allShops = [...allShops, ...uniqueGhosts];
@@ -85,7 +106,6 @@ export const api = {
         }
     }
 
-    // Sort shops by name for consistency
     allShops.sort((a, b) => a.name.localeCompare(b.name));
 
     return { 
@@ -97,14 +117,12 @@ export const api = {
 
   async fetchArrears(currentMonth: string, familyId: string) {
       try {
-        // 1. Get ALL shops from the past (Before this month)
         const { data: pastShops } = await supabase
           .from('shops')
           .select('id, name, base_rent, month')
           .eq('family_id', familyId)
-          .lt('month', currentMonth); // 'lt' means Less Than (older months)
+          .lt('month', currentMonth);
 
-        // 2. Get ALL payments from the past
         const { data: pastPayments } = await supabase
           .from('rent_records')
           .select('shop_id, amount_paid, month')
@@ -113,25 +131,20 @@ export const api = {
 
         if (!pastShops || !pastPayments) return {};
 
-        // 3. The Math: Calculate Balance per Shop Name
         const arrearsMap: Record<string, number> = {};
 
-        // Step A: Add up all Rent that SHOULD have been paid
         pastShops.forEach((shop) => {
             if (!arrearsMap[shop.name]) arrearsMap[shop.name] = 0;
             arrearsMap[shop.name] += Number(shop.base_rent);
         });
 
-        // Step B: Subtract all Rent that WAS paid
         pastPayments.forEach((payment) => {
-            // Find the shop name associated with this payment ID
             const originalShop = pastShops.find(s => s.id === payment.shop_id);
             if (originalShop && originalShop.name) {
                 arrearsMap[originalShop.name] -= Number(payment.amount_paid);
             }
         });
 
-        // Step C: Clean up (Remove negatives or zeros)
         Object.keys(arrearsMap).forEach(key => {
             if (arrearsMap[key] <= 0) delete arrearsMap[key];
         });
@@ -145,9 +158,7 @@ export const api = {
 
   // --- SETTLEMENT ACTION ---
   async settleUp(month: string, familyId: string) {
-    // Mark Rents as Settled
     await supabase.from('rent_records').update({ is_settled: true }).eq('month', month).eq('family_id', familyId).eq('is_settled', false);
-    // Mark Expenses as Settled
     await supabase.from('expenses').update({ is_settled: true }).eq('month', month).eq('family_id', familyId).eq('is_settled', false);
   },
 
@@ -162,7 +173,6 @@ export const api = {
     } else if (amount > 0) {
       await supabase.from('rent_records').insert([{ month, shop_id: shopId, amount_paid: amount, collected_by: collector, status: 'Paid', family_id: familyId, is_settled: false }]);
     }
-    // Return updated list
     const { data: rentRecords } = await supabase.from('rent_records').select('*').eq('month', month).eq('family_id', familyId);
     return { rentRecords: rentRecords || [] };
   },
