@@ -1,10 +1,10 @@
-# 🏠 Rental Management System
+# Rental Management System
 
 > Built to solve a real family problem — managing rent collection 
 > and shared expenses across multiple shops without errors.
 
-🌐 **Live Demo:** https://rental-management-system-five.vercel.app  
-📱 **Android APK:** [Download v1.0](link-to-your-apk-in-releases)
+**Live Demo:** https://rental-management-system-five.vercel.app  
+**Android APK:** [Download v1.0](link-to-your-apk-in-releases)
 
 ---
 
@@ -25,8 +25,8 @@ and expenses between 3 members. I built this to fix that.
 React • TypeScript • Vite • Tailwind CSS • Supabase • Capacitor
 
 ## Platforms
-✅ Web — deployed on Vercel  
-✅ Android APK — built with Capacitor
+Web — deployed on Vercel  
+Android APK — built with Capacitor
 
 ## Database (Supabase PostgreSQL)
 - `shops` — property details with family_id and base_rent
