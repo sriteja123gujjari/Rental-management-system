@@ -6,33 +6,30 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { generatePDF } from '../services/pdf';
+import { DEFAULT_SHOPS_DATA } from '../const';
 
 // --- TYPES ---
 interface Shop { id: string; name: string; base_rent: number; }
 interface RentRecord { shop_id: string; amount_paid: number; collected_by: string; status: string; is_settled?: boolean; }
 interface Expense { id: string; description: string; amount: number; paid_by: string; is_settled?: boolean; }
 
-// --- CONSTANTS ---
-const MEMBERS = ['Srinivas', 'Anjaneyulu', 'Goutham'];
-
-const DEFAULT_SHOPS_DATA = [
-  { name: 'Shaam Home', baseRent: 63000 },
-  { name: 'Medical Shop', baseRent: 60000 },
-  { name: 'Brown Bear', baseRent: 45000 },
-  { name: 'Bhavya Clinic', baseRent: 10500 },
-  { name: 'Dental', baseRent: 13000 },
-  { name: 'Gym', baseRent: 42000 },
-  { name: 'Besmile', baseRent: 10000 },
-];
-
-const PREDEFINED_EXPENSES = ["House electrical", "Bore", "Worker", "Internet bill"];
+interface DashboardProps {
+  user: any;
+  onLogout: () => void;
+  userMembers: string[];         // Dynamic — from user_preferences
+  predefinedExpenses: string[];  // Dynamic — from user_preferences
+}
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0, style: 'decimal' }).format(amount);
 };
 
-const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
-  const familyId = user?.user_metadata?.family_id || 'Gujjari';
+const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses }: DashboardProps) => {
+  const familyId = user?.user_metadata?.family_id || user?.user_metadata?.familyId || 'Gujjari';
+
+  // Dynamic constants from props (replaces hardcoded values)
+  const MEMBERS = userMembers;
+  const PREDEFINED_EXPENSES = predefinedExpenses;
 
   // DATA STATES
   const [shops, setShops] = useState<Shop[]>([]);
@@ -88,7 +85,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
     
     const totalExpensesAmount = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
     const net = totalReceived - totalExpensesAmount;
-    const share = net / 3;
+    const share = MEMBERS.length > 0 ? net / MEMBERS.length : 0;
 
     // --- PART 2: SETTLEMENT LOGIC ---
     const activeRecords = records.filter(r => !r.is_settled);
@@ -99,7 +96,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
         .reduce((sum, r) => sum + Number(r.amount_paid || 0), 0);
     const activeExpenseTotal = activeExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
     const activeNet = activeReceived - activeExpenseTotal;
-    const activeSplit = activeNet / 3;
+    const activeSplit = MEMBERS.length > 0 ? activeNet / MEMBERS.length : 0;
 
     const memberBalances: Record<string, number> = {};
     MEMBERS.forEach(m => memberBalances[m] = 0);
@@ -192,10 +189,11 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
     } catch(err) { console.error("Clear failed", err); } finally { setProcessingId(null); }
   };
 
-  const handleDownloadPdf = async () => await generatePDF(shops, records, expenses, currentMonth, monthlyData, 'download');
-  const handleShare = async () => await generatePDF(shops, records, expenses, currentMonth, monthlyData, 'share');
+  const handleDownloadPdf = async () => await generatePDF(shops, records, expenses, currentMonth, monthlyData, 'download', familyId);
+  const handleShare = async () => await generatePDF(shops, records, expenses, currentMonth, monthlyData, 'share', familyId);
 
-  const handleSeedShops = async () => { 
+  // "Load Default" now seeds shops from const.ts (migration defaults)
+  const handleSeedShops = async () => {
     setSubmitting(true); 
     for (const shopData of DEFAULT_SHOPS_DATA) { await api.addShop(currentMonth, { name: shopData.name, baseRent: shopData.baseRent }, familyId); } 
     await refreshData(true); setSubmitting(false); 
@@ -257,7 +255,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
       {/* HEADER */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-20 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3"><div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-200"> <Building2 size={22} /> </div><div><h1 className="text-xl font-black tracking-tight text-slate-900 leading-none">Gujjari's Rental</h1><p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Group: {familyId}</p></div></div>
+          <div className="flex items-center gap-3"><div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-200"> <Building2 size={22} /> </div><div><h1 className="text-xl font-black tracking-tight text-slate-900 leading-none">{familyId}'s Rental</h1><p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Group: {familyId}</p></div></div>
           <div className="flex items-center bg-slate-100 rounded-2xl p-1.5 w-full md:w-auto justify-between sm:justify-center ring-1 ring-slate-200 order-last md:order-none"><button onClick={() => changeMonth(-1)} className="h-10 w-10 flex items-center justify-center bg-white rounded-xl shadow-sm text-slate-600 hover:text-indigo-600 active:scale-90"> <ChevronLeft size={18} /> </button><div className="px-6 text-center flex flex-col"><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Period</span><span className="font-bold text-slate-800 text-sm whitespace-nowrap"> {new Date(currentMonth + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })} </span></div><button onClick={() => changeMonth(1)} className="h-10 w-10 flex items-center justify-center bg-white rounded-xl shadow-sm text-slate-600 hover:text-indigo-600 active:scale-90"> <ChevronRight size={18} /> </button></div>
           <div className="w-full md:w-auto"><div className="hidden md:flex justify-end gap-2"><button onClick={handleDownloadPdf} className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all shadow-md text-sm whitespace-nowrap"> <Download size={18} /> <span>PDF</span> </button><button onClick={onLogout} className="p-3 bg-white border border-slate-200 text-slate-500 rounded-xl hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all" title="Logout"> <LogOut size={20} /> </button></div><div className="flex md:hidden gap-2"><button onClick={handleShare} className="flex-[4] h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center gap-2 font-bold shadow-md shadow-emerald-100 active:scale-95 transition-all"> <Share2 size={20} /> Share</button><button onClick={onLogout} className="flex-1 h-12 bg-slate-100 text-slate-500 border border-slate-200 rounded-2xl flex items-center justify-center active:scale-95 transition-all"> <LogOut size={20} /></button></div></div>
         </div>
@@ -266,7 +264,7 @@ const Dashboard = ({ user, onLogout }: { user: any, onLogout: () => void }) => {
       <main className="max-w-7xl mx-auto px-4 py-6 sm:py-8 space-y-8">
         
         {/* STATS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"><StatCard title="Received" value={monthlyData.received} type="success" icon={TrendingUp} /><StatCard title="Expenses" value={monthlyData.totalExpenses} type="danger" icon={Receipt} /><StatCard title="Net Balance" value={monthlyData.net} type="primary" icon={Wallet} /><StatCard title="Share (1/3)" value={monthlyData.split} type="warning" icon={Users} /></div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"><StatCard title="Received" value={monthlyData.received} type="success" icon={TrendingUp} /><StatCard title="Expenses" value={monthlyData.totalExpenses} type="danger" icon={Receipt} /><StatCard title="Net Balance" value={monthlyData.net} type="primary" icon={Wallet} /><StatCard title={`Share (1/${MEMBERS.length})`} value={monthlyData.split} type="warning" icon={Users} /></div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">

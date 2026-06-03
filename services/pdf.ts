@@ -7,7 +7,7 @@ const formatIndianCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(amount);
 };
 
-export const generatePDF = (shops: any[], records: any[], expenses: any[], currentMonth: string, monthlyData: any, returnType: 'save' | 'blob' | 'base64' = 'save') => {
+export const generatePDF = (shops: any[], records: any[], expenses: any[], currentMonth: string, monthlyData: any, returnType: 'save' | 'blob' | 'base64' | 'download' | 'share' = 'save', familyId: string = 'Gujjari') => {
   const doc = new jsPDF();
 
   const [year, month] = currentMonth.split('-');
@@ -20,7 +20,7 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
   
   doc.setFontSize(16);
   doc.setTextColor(30, 41, 59);
-  doc.text(`${PDF_FILE_PREFIX}: ${monthName} ${year}`, 14, 16);
+  doc.text(`${familyId}'s Rent Report: ${monthName} ${year}`, 14, 16);
   
   const today = new Date();
   const dateStr = `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;
@@ -145,6 +145,6 @@ export const generatePDF = (shops: any[], records: any[], expenses: any[], curre
   } else if (returnType === 'blob') {
     return doc.output('blob'); 
   } else {
-    doc.save(`Gujjari's_Rent_Report_${currentMonth}.pdf`); 
+    doc.save(`${familyId}'s_Rent_Report_${currentMonth}.pdf`); 
   }
 };

@@ -112,5 +112,114 @@ export const api = {
 
   async deleteExpense(month: string, id: string, familyId: string) {
     await supabase.from('expenses').delete().eq('month', month).eq('id', id).eq('family_id', familyId);
-  }
+  },
+
+  // --- GOOGLE OAUTH ---
+  async signInWithGoogle() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    if (error) throw error;
+  },
+
+  // --- SETTLE UP ---
+  async settleUp(month: string, familyId: string) {
+    // Mark all rent records for this month as settled
+    await supabase
+      .from('rent_records')
+      .update({ is_settled: true })
+      .eq('month', month)
+      .eq('family_id', familyId);
+    // Mark all expenses for this month as settled
+    await supabase
+      .from('expenses')
+      .update({ is_settled: true })
+      .eq('month', month)
+      .eq('family_id', familyId);
+  },
+
+  // --- UPDATE SHOP ---
+  async updateShop(month: string, shopId: string, shop: { name: string; baseRent: number }, familyId: string) {
+    await supabase
+      .from('shops')
+      .update({ name: shop.name, base_rent: shop.baseRent })
+      .eq('id', shopId)
+      .eq('month', month)
+      .eq('family_id', familyId);
+  },
+
+  // ============================================================
+  // USER PREFERENCES (Setup Upgrade)
+  // ============================================================
+
+  /**
+   * Fetch user setup preferences.
+   * Returns the preferences object or null if not found.
+   */
+  async getUserSetup(userId: string, familyId: string) {
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('family_id', familyId)
+      .single();
+
+    // PGRST116 = "no rows returned" — normal for first-time users
+    if (error && error.code !== 'PGRST116') {
+      console.error('getUserSetup error:', error);
+    }
+
+    return data || null;
+  },
+
+  /**
+   * Save (upsert) user setup preferences.
+   * Works for both initial creation and subsequent updates.
+   */
+  async saveUserSetup(
+    userId: string,
+    familyId: string,
+    prefs: { members: string[]; predefinedExpenses: string[]; setupComplete: boolean }
+  ) {
+    const { error } = await supabase
+      .from('user_preferences')
+      .upsert(
+        {
+          user_id: userId,
+          family_id: familyId,
+          members: prefs.members,
+          predefined_expenses: prefs.predefinedExpenses,
+          setup_complete: prefs.setupComplete,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,family_id' }
+      );
+
+    if (error) {
+      console.error('saveUserSetup error:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Check if a family already has shop data in the database.
+   * Used to determine if an existing user should be auto-migrated
+   * (skip SetupPage) vs shown the SetupPage for fresh setup.
+   */
+  async checkExistingFamilyData(familyId: string) {
+    const { count, error } = await supabase
+      .from('shops')
+      .select('id', { count: 'exact', head: true })
+      .eq('family_id', familyId);
+
+    if (error) {
+      console.error('checkExistingFamilyData error:', error);
+      return false;
+    }
+    // If any shops exist for this family, they are an existing user
+    return count !== null && count > 0;
+  },
 };
