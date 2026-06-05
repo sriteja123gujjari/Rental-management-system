@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { generatePDF } from '../services/pdf';
-import { DEFAULT_SHOPS_DATA } from '../const';
+// DEFAULT_SHOPS_DATA removed — each user's shops come from their own DB data only
 
 // --- TYPES ---
 interface Shop { id: string; name: string; base_rent: number; }
@@ -18,14 +18,14 @@ interface DashboardProps {
   onLogout: () => void;
   userMembers: string[];         // Dynamic — from user_preferences
   predefinedExpenses: string[];  // Dynamic — from user_preferences
+  familyId: string;              // From App.tsx state — never fallback to hardcoded value
 }
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0, style: 'decimal' }).format(amount);
 };
 
-const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses }: DashboardProps) => {
-  const familyId = user?.user_metadata?.family_id || user?.user_metadata?.familyId || 'Gujjari';
+const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }: DashboardProps) => {
 
   // Dynamic constants from props (replaces hardcoded values)
   const MEMBERS = userMembers;
@@ -37,6 +37,7 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses }: Dashboar
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
   const [arrears, setArrears] = useState<Record<string, number>>({});
+  const [hasAnyShops, setHasAnyShops] = useState(false);
   
   // UI STATES
   const [newShopName, setNewShopName] = useState('');
@@ -58,6 +59,9 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses }: Dashboar
   const refreshData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
+      const hasShops = await api.checkExistingFamilyData(familyId);
+      setHasAnyShops(hasShops);
+
       const data = await api.fetchMonthData(currentMonth, familyId);
       setShops(data.shops || []);
       setRecords(data.rentRecords || []);
@@ -192,11 +196,22 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses }: Dashboar
   const handleDownloadPdf = async () => await generatePDF(shops, records, expenses, currentMonth, monthlyData, 'download', familyId);
   const handleShare = async () => await generatePDF(shops, records, expenses, currentMonth, monthlyData, 'share', familyId);
 
-  // "Load Default" now seeds shops from const.ts (migration defaults)
+  // Copies shops from the user's most recent month into the current (empty) month
   const handleSeedShops = async () => {
     setSubmitting(true); 
-    for (const shopData of DEFAULT_SHOPS_DATA) { await api.addShop(currentMonth, { name: shopData.name, baseRent: shopData.baseRent }, familyId); } 
-    await refreshData(true); setSubmitting(false); 
+    try {
+      const latestShops = await api.getLatestShops(familyId, currentMonth);
+      if (latestShops && latestShops.length > 0) {
+        for (const shop of latestShops) {
+          await api.addShop(currentMonth, { name: shop.name, baseRent: shop.base_rent }, familyId);
+        }
+      }
+      await refreshData(true);
+    } catch (err) {
+      console.error("Failed to seed shops", err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSaveShop = async () => { 
@@ -320,7 +335,7 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses }: Dashboar
 
             {/* SHOP STATUS */}
             <section className="bg-white/80 backdrop-blur-xl rounded-[2.5rem] shadow-xl shadow-indigo-100/50 border border-white/20 overflow-hidden ring-1 ring-slate-100">
-               <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white/50"> <h2 className="text-lg font-black flex items-center gap-3 text-slate-800"><div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-200 text-white"><Building2 size={20} /></div>Shop Status</h2> {shops.length === 0 && ( <button onClick={handleSeedShops} disabled={submitting} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 disabled:opacity-50"> {submitting ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14} />} Load Default </button> )} </div>
+               <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white/50"> <h2 className="text-lg font-black flex items-center gap-3 text-slate-800"><div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-200 text-white"><Building2 size={20} /></div>Shop Status</h2> {shops.length === 0 && hasAnyShops && ( <button onClick={handleSeedShops} disabled={submitting} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 disabled:opacity-50"> {submitting ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14} />} Copy Shops </button> )} </div>
                <div className="md:hidden p-4 space-y-4 bg-slate-50/50">{shops.map((shop) => { const record = records.find((r) => r.shop_id === shop.id); const isPaid = !!record; const pastDue = arrears[shop.name] || 0; const totalObligation = shop.base_rent + pastDue; const paidAmount = record?.amount_paid || 0; const outstandingBalance = totalObligation - paidAmount; return ( <div key={shop.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-4 relative"> <div className="flex justify-between items-start"> <div><h3 className="font-bold text-slate-900 text-lg">{shop.name}</h3><p className="text-sm text-slate-400 font-mono mt-0.5">Rent: ₹{formatCurrency(shop.base_rent)}</p></div> <div className="flex gap-2 items-center"> {isPaid && (<div className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">Paid</div>)} <button onClick={() => { setEditingShopId(shop.id); setNewShopName(shop.name); setNewShopRent(shop.base_rent.toString()); }} className="p-2 bg-slate-50 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors"><Pencil size={16}/></button> <button onClick={() => deleteShop(shop.id)} className="p-2 bg-rose-50 text-rose-400 hover:text-rose-600 rounded-lg transition-colors"><Trash2 size={16}/></button> </div> </div> <div className="bg-slate-50/80 p-4 rounded-xl space-y-4"> <div className="flex justify-between items-center border-b border-slate-200 pb-4"> <div className="flex flex-col"><span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">ARREARS</span> {pastDue > 0 ? (<span className="text-rose-600 font-black text-lg mt-1">₹{formatCurrency(pastDue)}</span>) : (<span className="text-emerald-600 font-bold text-sm mt-1 flex items-center gap-1"><CheckCircle2 size={12}/> Clear</span>)} </div> <div className="flex flex-col items-end"><span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">DUE</span><span className={`font-bold text-lg ${outstandingBalance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>₹{formatCurrency(outstandingBalance)}</span></div> </div> <div className="flex justify-between items-center"><span className="text-[10px] uppercase text-emerald-600 font-bold tracking-wider">PAID</span><span className="text-emerald-700 font-bold text-lg">₹{formatCurrency(paidAmount)}</span></div> </div> <div> {!isPaid ? (<button onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-black"> <CreditCard size={18}/> Record Payment </button>) : (<div className="flex items-center gap-2"><div className="flex-grow bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-center justify-between px-4"><div className="flex flex-col"><span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">PAID</span><span className="text-[11px] text-slate-400">to {record?.collected_by}</span></div><div className="text-emerald-700 font-bold font-mono text-xl">₹{formatCurrency(record.amount_paid)}</div></div><button onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} className="h-full px-4 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-indigo-500 hover:border-indigo-100 transition-all"><Pencil size={18}/></button><button onClick={() => clearPayment(shop.id)} className="h-full px-4 bg-white border border-rose-100 text-rose-400 hover:text-rose-600 hover:border-rose-200 transition-all"><X size={18}/></button></div>)} </div> </div> ) })} </div>
                <div className="hidden md:block overflow-x-auto"> <table className="w-full text-left min-w-[700px]"> <thead> <tr className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100"> <th className="px-8 py-5 text-slate-700">Shop</th> <th className="px-6 py-5">Rent</th> <th className="px-6 py-5 text-indigo-700">Arrears</th> <th className="px-6 py-5 text-rose-700">Remaining Due</th> <th className="px-6 py-5 text-center">Payment</th> <th className="px-6 py-5 text-right">Actions</th> </tr> </thead> <tbody className="divide-y divide-slate-50"> {shops.map((shop) => { const record = records.find((r) => r.shop_id === shop.id); const isPaid = !!record; const isProcessing = processingId === shop.id; const pastDue = arrears[shop.name] || 0; const totalObligation = shop.base_rent + pastDue; const paidAmount = record?.amount_paid || 0; const outstandingBalance = totalObligation - paidAmount; return ( <tr key={shop.id} className="hover:bg-slate-50 transition-colors"> <td className="px-8 py-5 font-bold text-slate-700 text-sm">{shop.name}</td> <td className="px-6 py-5 font-mono text-xs text-slate-500">₹{formatCurrency(shop.base_rent)}</td> <td className="px-6 py-5 font-mono text-xs font-bold">{pastDue > 0 ? (<span className="text-rose-600">₹{formatCurrency(pastDue)}</span>) : (<span className="text-emerald-500 opacity-80 flex items-center gap-1"><CheckCircle2 size={10}/> Clear</span>)}</td> <td className="px-6 py-5 font-mono text-sm font-bold"><span className={outstandingBalance > 0 ? 'text-rose-600' : 'text-emerald-600'}>₹{formatCurrency(outstandingBalance)}</span></td> <td className="px-6 py-5"> <div className="flex flex-col gap-2 max-w-[240px] mx-auto"> {!isPaid ? (<button onClick={() => handleOpenPaymentModal(shop, null, outstandingBalance)} disabled={isProcessing} className="flex items-center justify-center gap-2 w-full py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-md"> {isProcessing ? <Loader2 size={12} className="animate-spin"/> : <CreditCard size={12} />} Record Payment </button>) : (<div className="flex items-center gap-2"><div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-xl p-2 flex flex-col items-center"><span className="text-[9px] text-emerald-600 font-bold uppercase tracking-wide">PAID</span><span className="text-sm font-bold text-emerald-700 font-mono">₹{formatCurrency(record?.amount_paid)}</span><span className="text-[9px] text-slate-400 mt-0.5">{record?.collected_by}</span></div><div className="flex flex-col gap-1"><button onClick={() => handleOpenPaymentModal(shop, record, outstandingBalance)} className="p-1.5 bg-white border border-slate-200 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-400 transition-colors"> <Pencil size={14} /> </button><button onClick={() => clearPayment(shop.id)} className="p-1.5 bg-white border border-slate-200 rounded-lg hover:bg-rose-50 hover:text-rose-600 text-slate-400 transition-colors"> <X size={14} /> </button></div></div>)} </div> </td> <td className="px-6 py-5 text-right"> <div className="flex justify-end gap-2"> <button onClick={() => { setEditingShopId(shop.id); setNewShopName(shop.name); setNewShopRent(shop.base_rent.toString()); }} className="text-slate-300 hover:text-indigo-500 p-2"><Pencil size={16} /></button> <button onClick={() => deleteShop(shop.id)} className="text-slate-300 hover:text-rose-500 p-2" disabled={isProcessing}> {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} </button> </div> </td> </tr> ); })} </tbody> </table> </div>
                <div className="p-6 bg-slate-50 border-t border-slate-100"> <div className="flex flex-col sm:flex-row gap-3"> <div className="w-full"> <input type="text" placeholder="Shop Name" className="w-full px-5 h-14 rounded-2xl border border-slate-200 focus:border-indigo-500 outline-none text-sm font-bold shadow-sm" value={newShopName} onChange={(e) => setNewShopName(e.target.value)} /> </div> <div className="flex gap-3 w-full sm:w-auto"> <div className="flex-grow sm:w-40"> <input type="number" placeholder="Rent" className="w-full px-5 h-14 rounded-2xl border border-slate-200 focus:border-indigo-500 outline-none text-sm font-bold shadow-sm" value={newShopRent} onChange={(e) => setNewShopRent(e.target.value)} /> </div> <button onClick={handleSaveShop} disabled={submitting} className="h-14 px-8 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm shadow-xl shadow-slate-200 disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap"> {submitting ? <Loader2 size={18} className="animate-spin" /> : (editingShopId ? <Save size={18} /> : <Plus size={18} />)} {editingShopId ? 'Update' : 'Add Shop'} </button> {editingShopId && (<button onClick={() => { setEditingShopId(null); setNewShopName(''); setNewShopRent(''); }} className="h-14 w-14 flex items-center justify-center bg-white border border-slate-200 text-slate-400 rounded-2xl hover:text-rose-500"> <X size={20} /> </button>)} </div> </div> </div>

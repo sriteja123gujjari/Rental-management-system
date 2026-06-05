@@ -12,6 +12,7 @@ interface SetupPageProps {
   user: any;
   familyId: string; // may be empty if Google OAuth user
   onSetupComplete: (members: string[], expenses: string[], familyId: string) => void;
+  onLogout?: () => void;
 }
 
 interface ShopEntry {
@@ -30,7 +31,7 @@ const EXPENSE_SUGGESTIONS = [
 // ============================================================
 // SETUP PAGE COMPONENT
 // ============================================================
-const SetupPage = ({ user, familyId: initialFamilyId, onSetupComplete }: SetupPageProps) => {
+const SetupPage = ({ user, familyId: initialFamilyId, onSetupComplete, onLogout }: SetupPageProps) => {
   // --- STEP STATE ---
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 3;
@@ -485,14 +486,21 @@ const SetupPage = ({ user, familyId: initialFamilyId, onSetupComplete }: SetupPa
 
           {/* Navigation buttons */}
           <div className="flex gap-3 mt-8">
-            {currentStep > 1 && (
+            {currentStep > 1 ? (
               <button
                 onClick={goBack}
                 className="flex-1 h-14 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
               >
                 <ArrowLeft size={18} /> Back
               </button>
-            )}
+            ) : onLogout ? (
+              <button
+                onClick={onLogout}
+                className="flex-1 h-14 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+              >
+                <ArrowLeft size={18} /> Back
+              </button>
+            ) : null}
 
             {currentStep < totalSteps ? (
               <button

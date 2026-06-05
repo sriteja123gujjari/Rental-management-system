@@ -97,6 +97,17 @@ export const api = {
   },
 
   async addShop(month: string, shop: any, familyId: string) {
+    const { data: existing } = await supabase
+      .from('shops')
+      .select('id')
+      .eq('month', month)
+      .eq('name', shop.name)
+      .eq('family_id', familyId)
+      .maybeSingle();
+
+    if (existing) {
+      return;
+    }
     await supabase.from('shops').insert([{ month, name: shop.name, base_rent: shop.baseRent, family_id: familyId }]);
   },
 
@@ -221,5 +232,44 @@ export const api = {
     }
     // If any shops exist for this family, they are an existing user
     return count !== null && count > 0;
+  },
+
+  /**
+   * Fetch the shops from the most recent month that has shop configurations.
+   * @param excludeMonth - optional month to exclude (prevents self-referential seeding)
+   */
+  async getLatestShops(familyId: string, excludeMonth?: string) {
+    let query = supabase
+      .from('shops')
+      .select('month')
+      .eq('family_id', familyId)
+      .order('month', { ascending: false })
+      .limit(1);
+
+    if (excludeMonth) {
+      query = query.neq('month', excludeMonth);
+    }
+
+    const { data: latestRecords, error: err1 } = await query;
+
+    if (err1 || !latestRecords || latestRecords.length === 0) {
+      if (err1) console.error('Error fetching latest shop month:', err1);
+      return [];
+    }
+
+    const latestMonth = latestRecords[0].month;
+
+    const { data: shops, error: err2 } = await supabase
+      .from('shops')
+      .select('*')
+      .eq('month', latestMonth)
+      .eq('family_id', familyId);
+
+    if (err2) {
+      console.error('Error fetching shops for latest month:', err2);
+      return [];
+    }
+
+    return shops || [];
   },
 };

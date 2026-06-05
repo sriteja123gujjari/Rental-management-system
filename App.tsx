@@ -79,8 +79,9 @@ const App = () => {
     setSetupStatus('loading');
 
     try {
-      // 1. Determine familyId
-      const fId = currentUser.user_metadata?.family_id || currentUser.user_metadata?.familyId || '';
+      // 1. Determine familyId — normalize to uppercase + trimmed to prevent case mismatches
+      const rawFId = currentUser.user_metadata?.family_id || currentUser.user_metadata?.familyId || '';
+      const fId = rawFId.trim().toUpperCase();
       setFamilyId(fId);
 
       // 2. If familyId is available, check for existing preferences
@@ -135,10 +136,36 @@ const App = () => {
   // HANDLERS
   // ============================================================
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Error during signOut:', err);
+    }
+    // Manually clean up any Supabase local storage keys to prevent auto-login on reload
+    for (const key in localStorage) {
+      if (key.startsWith('sb-') || key.includes('supabase')) {
+        localStorage.removeItem(key);
+      }
+    }
+    sessionStorage.clear();
     // ✅ Full page reload — guarantees AuthPage remounts 100% fresh
-    // with Google button visible, no stale state from previous session
     window.location.href = window.location.pathname;
+  };
+
+  // Lighter-weight "go back to auth" used by SetupPage — no page reload needed
+  const handleBackToAuth = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Error during signOut:', err);
+    }
+    // Reset all state so React renders AuthPage immediately
+    setUser(null);
+    setSetupStatus('loading');
+    setUserMembers([]);
+    setUserExpenses([]);
+    setFamilyId('');
+    setLogoutKey(prev => prev + 1);
   };
 
   const handleSetupComplete = (members: string[], expenses: string[], newFamilyId: string) => {
@@ -187,6 +214,7 @@ const App = () => {
         user={user}
         familyId={familyId}
         onSetupComplete={handleSetupComplete}
+        onLogout={handleBackToAuth}
       />
     );
   }
@@ -199,6 +227,7 @@ const App = () => {
         onLogout={handleLogout}
         userMembers={userMembers}
         predefinedExpenses={userExpenses}
+        familyId={familyId}
       />
     </div>
   );
