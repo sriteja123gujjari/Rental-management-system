@@ -87,11 +87,17 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
       }
     }
 
-    // Direct synchronous redirection to prevent mobile browsers from blocking custom URI schemes as popups
-    if (customUpiAppScheme) {
-      window.location.href = customUpiAppScheme;
-    } else {
-      window.location.href = "upi://";
+    // Direct synchronous redirection using a temporary click link to bypass mobile browser blocker
+    try {
+      const link = document.createElement("a");
+      link.href = customUpiAppScheme || "upi://";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Failed to launch UPI application", err);
+      // Fallback
+      window.location.href = customUpiAppScheme || "upi://";
     }
   };
 
@@ -399,19 +405,33 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                               <div className="flex flex-col gap-2">
                                 {/* Buttons row — always shown when UPI ID exists and under ₹1L */}
                                 <div className="flex flex-wrap gap-2 items-center">
+                                  {/* Hidden Canvas for instant synchronous download */}
+                                  <div className="hidden">
+                                    <QRCodeCanvas
+                                      id={`upi-qr-canvas-hidden-${idx}`}
+                                      value={upiUri}
+                                      size={180}
+                                      bgColor="#ffffff"
+                                      fgColor="#0f172a"
+                                      level="H"
+                                      includeMargin={false}
+                                    />
+                                  </div>
+
                                   <button
-                                    onClick={() => { window.location.href = upiUri; }}
+                                    onClick={() => {
+                                      if (isQrOpen) {
+                                        setExpandedQr(null);
+                                      } else {
+                                        setExpandedQr(idx);
+                                        // Instantly trigger download and launch payment app synchronously
+                                        handleDownloadAndPay(`upi-qr-canvas-hidden-${idx}`, t.amount, t.to);
+                                      }
+                                    }}
                                     className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-indigo-900/30"
                                   >
-                                    <Smartphone size={14} />
-                                    Pay via UPI
-                                  </button>
-                                  <button
-                                    onClick={() => setExpandedQr(isQrOpen ? null : idx)}
-                                    className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs transition-all active:scale-95"
-                                  >
                                     <QrCode size={14} />
-                                    {isQrOpen ? 'Hide QR' : 'Show QR'}
+                                    {isQrOpen ? 'Hide QR' : 'Pay via QR'}
                                   </button>
                                 </div>
                               </div>
