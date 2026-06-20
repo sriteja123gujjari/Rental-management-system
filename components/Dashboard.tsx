@@ -414,22 +414,6 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                                     {isQrOpen ? 'Hide QR' : 'Show QR'}
                                   </button>
                                 </div>
-                                {/* SBI advisory — shown for amounts > ₹2,000 */}
-                                {t.amount > 2000 && (
-                                  <div className="flex items-start gap-2 px-3 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                                    <AlertTriangle size={13} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                                    <div className="space-y-1">
-                                      <p className="text-amber-300 text-[11px] font-bold">⚠️ SBI users: ₹2,000 per-transaction limit</p>
-                                      <p className="text-amber-400/80 text-[10px] leading-relaxed">To pay ₹{formatCurrency(t.amount)}, you can:</p>
-                                      <ul className="text-amber-400/80 text-[10px] space-y-0.5 pl-2">
-                                        <li>• Split into <span className="text-amber-300 font-bold">{Math.ceil(t.amount / 2000)} payments</span> of ≤₹2,000 via SBI UPI</li>
-                                        <li>• Use <span className="text-amber-300 font-bold">NEFT/IMPS</span> in YONO SBI (no ₹2,000 cap)</li>
-                                        <li>• Pay via Google Pay/PhonePe on <span className="text-amber-300 font-bold">HDFC, ICICI or Axis</span> (limit ₹1,00,000)</li>
-                                        <li>• Raise limit: <span className="text-amber-300 font-bold">YONO SBI → UPI → Settings → Transaction Limit</span></li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                )}
                               </div>
                             ) : upiId && exceedsLimit ? (
                               /* Amount exceeds absolute UPI limit of ₹1,00,000 */
