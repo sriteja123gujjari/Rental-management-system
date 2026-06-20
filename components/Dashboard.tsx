@@ -60,7 +60,7 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
     }
   }, [toast]);
 
-  const handleDownloadAndPay = (canvasId: string, amount: number, to: string, customUpiAppScheme?: string) => {
+  const handleDownloadOnly = (canvasId: string, amount: number, to: string) => {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
     if (canvas) {
       try {
@@ -85,19 +85,6 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
           type: 'info'
         });
       }
-    }
-
-    // Direct synchronous redirection using a temporary click link to bypass mobile browser blocker
-    try {
-      const link = document.createElement("a");
-      link.href = customUpiAppScheme || "upi://";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      console.error("Failed to launch UPI application", err);
-      // Fallback
-      window.location.href = customUpiAppScheme || "upi://";
     }
   };
 
@@ -418,21 +405,23 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                                     />
                                   </div>
 
-                                  <button
-                                    onClick={() => {
+                                  <a
+                                    href={isQrOpen ? undefined : upiUri}
+                                    onClick={(e) => {
                                       if (isQrOpen) {
+                                        e.preventDefault();
                                         setExpandedQr(null);
                                       } else {
                                         setExpandedQr(idx);
-                                        // Instantly trigger download and launch payment app synchronously
-                                        handleDownloadAndPay(`upi-qr-canvas-hidden-${idx}`, t.amount, t.to);
+                                        // Instantly trigger download synchronously
+                                        handleDownloadOnly(`upi-qr-canvas-hidden-${idx}`, t.amount, t.to);
                                       }
                                     }}
-                                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-indigo-900/30"
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-indigo-900/30 cursor-pointer"
                                   >
                                     <QrCode size={14} />
                                     {isQrOpen ? 'Hide QR' : 'Pay via QR'}
-                                  </button>
+                                  </a>
                                 </div>
                               </div>
                             ) : upiId && exceedsLimit ? (
@@ -462,9 +451,10 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                                   </p>
                                 </div>
 
-                                {/* Tappable QR — clicking downloads the QR code as image and launches UPI app */}
-                                <div
-                                  onClick={() => handleDownloadAndPay(`upi-qr-canvas-${idx}`, t.amount, t.to)}
+                                {/* Tappable QR — clicking downloads the QR code as image and launches UPI app natively */}
+                                <a
+                                  href={upiUri}
+                                  onClick={() => handleDownloadOnly(`upi-qr-canvas-${idx}`, t.amount, t.to)}
                                   title="Tap to download QR and pay"
                                   className="block rounded-2xl p-4 bg-white border border-white/10 active:scale-95 transition-all cursor-pointer shadow-lg hover:shadow-indigo-500/20"
                                 >
@@ -477,7 +467,7 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                                     level="H"
                                     includeMargin={false}
                                   />
-                                </div>
+                                </a>
 
                                 {/* UPI ID + amount labels */}
                                 <div className="text-center space-y-0.5">
@@ -496,7 +486,7 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                                 {/* Action Buttons */}
                                 <div className="w-full flex flex-col gap-2">
                                   <button
-                                    onClick={() => handleDownloadAndPay(`upi-qr-canvas-${idx}`, t.amount, t.to)}
+                                    onClick={() => handleDownloadOnly(`upi-qr-canvas-${idx}`, t.amount, t.to)}
                                     className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-indigo-900/30"
                                   >
                                     <Download size={13} />
@@ -504,24 +494,27 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                                   </button>
 
                                   <div className="grid grid-cols-3 gap-1.5 mt-1">
-                                    <button
-                                      onClick={() => handleDownloadAndPay(`upi-qr-canvas-${idx}`, t.amount, t.to, 'phonepe://')}
-                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/20 rounded-xl transition-all active:scale-95"
+                                    <a
+                                      href="phonepe://"
+                                      onClick={() => handleDownloadOnly(`upi-qr-canvas-${idx}`, t.amount, t.to)}
+                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/20 rounded-xl transition-all active:scale-95 text-center cursor-pointer"
                                     >
                                       <span className="text-[10px] font-bold">PhonePe</span>
-                                    </button>
-                                    <button
-                                      onClick={() => handleDownloadAndPay(`upi-qr-canvas-${idx}`, t.amount, t.to, 'gpay://')}
-                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-blue-600/20 hover:bg-blue-600/35 text-blue-300 border border-blue-500/20 rounded-xl transition-all active:scale-95"
+                                    </a>
+                                    <a
+                                      href="gpay://"
+                                      onClick={() => handleDownloadOnly(`upi-qr-canvas-${idx}`, t.amount, t.to)}
+                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-blue-600/20 hover:bg-blue-600/35 text-blue-300 border border-blue-500/20 rounded-xl transition-all active:scale-95 text-center cursor-pointer"
                                     >
                                       <span className="text-[10px] font-bold">Google Pay</span>
-                                    </button>
-                                    <button
-                                      onClick={() => handleDownloadAndPay(`upi-qr-canvas-${idx}`, t.amount, t.to, 'paytmmp://')}
-                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-sky-600/20 hover:bg-sky-600/35 text-sky-300 border border-sky-500/20 rounded-xl transition-all active:scale-95"
+                                    </a>
+                                    <a
+                                      href="paytmmp://"
+                                      onClick={() => handleDownloadOnly(`upi-qr-canvas-${idx}`, t.amount, t.to)}
+                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-sky-600/20 hover:bg-sky-600/35 text-sky-300 border border-sky-500/20 rounded-xl transition-all active:scale-95 text-center cursor-pointer"
                                     >
                                       <span className="text-[10px] font-bold">Paytm</span>
-                                    </button>
+                                    </a>
                                   </div>
                                 </div>
                               </div>
