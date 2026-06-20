@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Users, Building2, Receipt, ArrowRight, ArrowLeft, Plus, Trash2,
-  Check, Loader2, Sparkles, UserPlus, Store, ClipboardList,
+  Check, Loader2, Sparkles, UserPlus, Store, ClipboardList, Smartphone,
 } from 'lucide-react';
 import { api, supabase } from '../services/api';
 
@@ -40,6 +40,8 @@ const SetupPage = ({ user, familyId: initialFamilyId, onSetupComplete, onLogout 
   const [groupName, setGroupName] = useState(initialFamilyId || '');
   const needsGroupName = !initialFamilyId; // Google OAuth users won't have familyId
   const [members, setMembers] = useState<string[]>(['', '']);
+  // Optional UPI IDs keyed by member index
+  const [memberUpiInputs, setMemberUpiInputs] = useState<string[]>(['', '']);
 
   // --- STEP 2: SHOPS ---
   const [shops, setShops] = useState<ShopEntry[]>([{ name: '', baseRent: '' }]);
@@ -55,15 +57,24 @@ const SetupPage = ({ user, familyId: initialFamilyId, onSetupComplete, onLogout 
   // ============================================================
   // MEMBER HANDLERS
   // ============================================================
-  const addMember = () => setMembers([...members, '']);
+  const addMember = () => {
+    setMembers([...members, '']);
+    setMemberUpiInputs([...memberUpiInputs, '']);
+  };
   const removeMember = (index: number) => {
     if (members.length <= 2) return; // minimum 2 members
     setMembers(members.filter((_, i) => i !== index));
+    setMemberUpiInputs(memberUpiInputs.filter((_, i) => i !== index));
   };
   const updateMember = (index: number, value: string) => {
     const updated = [...members];
     updated[index] = value;
     setMembers(updated);
+  };
+  const updateMemberUpi = (index: number, value: string) => {
+    const updated = [...memberUpiInputs];
+    updated[index] = value;
+    setMemberUpiInputs(updated);
   };
 
   // ============================================================
@@ -149,11 +160,22 @@ const SetupPage = ({ user, familyId: initialFamilyId, onSetupComplete, onLogout 
       const finalMembers = validMembers;
       const finalExpenses = [...expenses];
 
+      // Build UPI map: only include members with non-empty UPI IDs
+      const memberUpiIds: Record<string, string> = {};
+      members.forEach((name, idx) => {
+        const trimmedName = name.trim();
+        const trimmedUpi = (memberUpiInputs[idx] || '').trim();
+        if (trimmedName && trimmedUpi) {
+          memberUpiIds[trimmedName] = trimmedUpi;
+        }
+      });
+
       // 1. Save user preferences to user_preferences table
       await api.saveUserSetup(user.id, finalFamilyId, {
         members: finalMembers,
         predefinedExpenses: finalExpenses,
         setupComplete: true,
+        memberUpiIds,
       });
 
       // 2. Seed initial shops to shops table for the current month
@@ -242,25 +264,38 @@ const SetupPage = ({ user, familyId: initialFamilyId, onSetupComplete, onLogout 
       <div className="space-y-3">
         <label className="text-[11px] font-bold text-slate-400 uppercase ml-1 block tracking-widest">Members</label>
         {members.map((member, idx) => (
-          <div key={idx} className="flex gap-2 items-center animate-in fade-in zoom-in duration-200">
-            <div className="flex-1 relative group">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 font-bold text-sm">{idx + 1}</span>
+          <div key={idx} className="space-y-2 animate-in fade-in zoom-in duration-200">
+            <div className="flex gap-2 items-center">
+              <div className="flex-1 relative group">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 font-bold text-sm">{idx + 1}</span>
+                <input
+                  type="text"
+                  placeholder={`Member ${idx + 1} name`}
+                  className="w-full h-14 pl-10 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400"
+                  value={member}
+                  onChange={(e) => updateMember(idx, e.target.value)}
+                />
+              </div>
+              {members.length > 2 && (
+                <button
+                  onClick={() => removeMember(idx)}
+                  className="p-3 bg-rose-50 text-rose-400 hover:text-rose-600 rounded-xl transition-colors border border-rose-100"
+                >
+                  <Trash2 size={18} />
+                </button>
+              )}
+            </div>
+            {/* Optional UPI ID field */}
+            <div className="flex items-center gap-2 ml-1">
+              <Smartphone size={14} className="text-slate-300 flex-shrink-0" />
               <input
                 type="text"
-                placeholder={`Member ${idx + 1} name`}
-                className="w-full h-14 pl-10 pr-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 font-bold text-slate-700 transition-all placeholder:text-slate-400"
-                value={member}
-                onChange={(e) => updateMember(idx, e.target.value)}
+                placeholder="UPI ID (optional, e.g. name@ybl)"
+                className="flex-1 h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:bg-white focus:border-indigo-400 text-slate-600 text-sm transition-all placeholder:text-slate-300 font-medium"
+                value={memberUpiInputs[idx] || ''}
+                onChange={(e) => updateMemberUpi(idx, e.target.value)}
               />
             </div>
-            {members.length > 2 && (
-              <button
-                onClick={() => removeMember(idx)}
-                className="p-3 bg-rose-50 text-rose-400 hover:text-rose-600 rounded-xl transition-colors border border-rose-100"
-              >
-                <Trash2 size={18} />
-              </button>
-            )}
           </div>
         ))}
       </div>

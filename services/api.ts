@@ -193,7 +193,7 @@ export const api = {
   async saveUserSetup(
     userId: string,
     familyId: string,
-    prefs: { members: string[]; predefinedExpenses: string[]; setupComplete: boolean }
+    prefs: { members: string[]; predefinedExpenses: string[]; setupComplete: boolean; memberUpiIds?: Record<string, string> }
   ) {
     const { error } = await supabase
       .from('user_preferences')
@@ -204,6 +204,7 @@ export const api = {
           members: prefs.members,
           predefined_expenses: prefs.predefinedExpenses,
           setup_complete: prefs.setupComplete,
+          member_upi_ids: prefs.memberUpiIds ?? {},
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id,family_id' }
@@ -213,6 +214,66 @@ export const api = {
       console.error('saveUserSetup error:', error);
       throw error;
     }
+  },
+
+  /**
+   * Fetch the merged member→UPI ID map for a family.
+   * Scans all user_preferences rows for this family_id and merges
+   * member_upi_ids, so any admin who ran setup contributes their saved map.
+   */
+  async getMemberUpiIds(familyId: string): Promise<Record<string, string>> {
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('member_upi_ids')
+      .eq('family_id', familyId);
+
+    if (error) {
+      console.error('getMemberUpiIds error:', error);
+      return {};
+    }
+
+    // Merge all rows — later rows overwrite earlier ones for the same member key
+    const merged: Record<string, string> = {};
+    (data || []).forEach((row) => {
+      if (row.member_upi_ids && typeof row.member_upi_ids === 'object') {
+        Object.assign(merged, row.member_upi_ids);
+      }
+    });
+    return merged;
+  },
+
+  /**
+   * Update the logged-in user's own UPI ID in user_preferences.
+   * Also patches their entry inside the shared member_upi_ids map.
+   */
+  async saveUserUpiId(
+    userId: string,
+    familyId: string,
+    memberName: string,
+    upiId: string
+  ) {
+    // First read the existing map so we can patch just one key
+    const existing = await this.getMemberUpiIds(familyId);
+    const updatedMap = { ...existing, [memberName]: upiId };
+
+    const { error } = await supabase
+      .from('user_preferences')
+      .upsert(
+        {
+          user_id: userId,
+          family_id: familyId,
+          upi_id: upiId,
+          member_upi_ids: updatedMap,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,family_id' }
+      );
+
+    if (error) {
+      console.error('saveUserUpiId error:', error);
+      throw error;
+    }
+    return updatedMap;
   },
 
   /**

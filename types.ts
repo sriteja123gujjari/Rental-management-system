@@ -1,4 +1,9 @@
 
+// Map of member name → UPI ID (e.g. { "Alice": "alice@ybl", "Bob": "" })
+export interface MemberUpiIds {
+  [memberName: string]: string;
+}
+
 export interface User {
   id: string;
   name: string;
