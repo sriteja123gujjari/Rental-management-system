@@ -475,14 +475,6 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                                   <p className="text-indigo-400 text-sm font-black">₹{formatCurrency(t.amount)}</p>
                                 </div>
 
-                                {/* Quick instructions */}
-                                <div className="w-full bg-slate-950/50 border border-white/5 rounded-2xl p-3 text-[10px] text-slate-300 leading-normal space-y-1">
-                                  <p className="font-bold text-amber-400">SBI / High Amount Gallery Pay Instructions:</p>
-                                  <p>1. Tap the QR image above to download it.</p>
-                                  <p>2. Open your preferred payment app below.</p>
-                                  <p>3. Tap <span className="font-semibold text-white">"Scan QR"</span> inside the app, tap the <span className="font-semibold text-white">Gallery/Photos icon</span>, and choose the downloaded image to pay!</p>
-                                </div>
-
                                 {/* Action Buttons */}
                                 <div className="w-full flex flex-col gap-2">
                                   <button
@@ -492,30 +484,6 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                                     <Download size={13} />
                                     Download QR Image
                                   </button>
-
-                                  <div className="grid grid-cols-3 gap-1.5 mt-1">
-                                    <a
-                                      href="phonepe://"
-                                      onClick={() => handleDownloadOnly(`upi-qr-canvas-${idx}`, t.amount, t.to)}
-                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/20 rounded-xl transition-all active:scale-95 text-center cursor-pointer"
-                                    >
-                                      <span className="text-[10px] font-bold">PhonePe</span>
-                                    </a>
-                                    <a
-                                      href="gpay://"
-                                      onClick={() => handleDownloadOnly(`upi-qr-canvas-${idx}`, t.amount, t.to)}
-                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-blue-600/20 hover:bg-blue-600/35 text-blue-300 border border-blue-500/20 rounded-xl transition-all active:scale-95 text-center cursor-pointer"
-                                    >
-                                      <span className="text-[10px] font-bold">Google Pay</span>
-                                    </a>
-                                    <a
-                                      href="paytmmp://"
-                                      onClick={() => handleDownloadOnly(`upi-qr-canvas-${idx}`, t.amount, t.to)}
-                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-sky-600/20 hover:bg-sky-600/35 text-sky-300 border border-sky-500/20 rounded-xl transition-all active:scale-95 text-center cursor-pointer"
-                                    >
-                                      <span className="text-[10px] font-bold">Paytm</span>
-                                    </a>
-                                  </div>
                                 </div>
                               </div>
                             )}
