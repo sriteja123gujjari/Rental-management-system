@@ -5,7 +5,7 @@ import {
   Loader2, ArrowRightLeft, UserCircle, Save, AlertCircle, Pencil, X, LogOut, Share2, List, CheckCircle2, Check,
   Smartphone, AlertTriangle, QrCode
 } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { api } from '../services/api';
 import { generatePDF } from '../services/pdf';
 // DEFAULT_SHOPS_DATA removed — each user's shops come from their own DB data only
@@ -48,6 +48,54 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
   const [savingUpi, setSavingUpi] = useState(false);
   // QR code expansion: track which transaction index has QR expanded
   const [expandedQr, setExpandedQr] = useState<number | null>(null);
+
+  // Toast state for QR Code download status
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+
+  // Auto-clear toast timer
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const handleDownloadAndPay = (canvasId: string, amount: number, to: string, customUpiAppScheme?: string) => {
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    if (canvas) {
+      try {
+        const url = canvas.toDataURL("image/png");
+        const a = document.createElement("a");
+        a.href = url;
+        const cleanName = to.replace(/[^a-zA-Z0-9]/g, '_');
+        a.download = `Pay_${cleanName}_Rs_${amount}_QR.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        // Show success toast
+        setToast({
+          message: `QR code saved! Open your payment app, tap Scan QR, and choose the image from your gallery/photos.`,
+          type: 'success'
+        });
+      } catch (err) {
+        console.error("Failed to download QR code image", err);
+        setToast({
+          message: "Failed to download QR code automatically. Please try taking a screenshot instead.",
+          type: 'info'
+        });
+      }
+    }
+
+    // Open the target UPI app after a short delay
+    setTimeout(() => {
+      if (customUpiAppScheme) {
+        window.location.href = customUpiAppScheme;
+      } else {
+        window.location.href = "upi://";
+      }
+    }, 1200);
+  };
 
   // UI STATES
   const [newShopName, setNewShopName] = useState('');
@@ -403,46 +451,77 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
 
                             {/* QR Code panel */}
                             {isQrOpen && upiId && !exceedsLimit && (
-                              <div className="mt-3 flex flex-col items-center gap-3 bg-white rounded-2xl p-5 animate-in fade-in zoom-in duration-200">
+                              <div className="mt-3 flex flex-col items-center gap-4 bg-slate-900/90 border border-white/10 rounded-3xl p-5 animate-in fade-in zoom-in duration-200">
                                 {/* Label */}
-                                <div className="text-center">
-                                  <p className="text-slate-700 text-xs font-black uppercase tracking-wider">Pay ₹{formatCurrency(t.amount)} to {t.to}</p>
-                                  <p className="text-slate-400 text-[10px] mt-0.5">
-                                    📱 <span className="font-bold text-indigo-500">Tap the QR</span> on mobile to open payment app &nbsp;·&nbsp; 🖥️ Scan with another phone on desktop
+                                <div className="text-center space-y-1">
+                                  <p className="text-white text-xs font-black uppercase tracking-wider">Pay ₹{formatCurrency(t.amount)} to {t.to}</p>
+                                  <p className="text-slate-400 text-[10px] max-w-[280px] mx-auto leading-normal">
+                                    📸 <span className="text-indigo-400 font-bold">Tap the QR code</span> to save to gallery & open your UPI app automatically.
                                   </p>
                                 </div>
 
-                                {/* Tappable QR — clicking opens the UPI deep link directly */}
-                                <a
-                                  href={upiUri}
-                                  title="Tap to pay via UPI"
-                                  className="block rounded-2xl p-3 bg-white border-2 border-transparent hover:border-indigo-400 active:scale-95 transition-all cursor-pointer shadow-md hover:shadow-indigo-100 ring-0 hover:ring-4 hover:ring-indigo-100"
-                                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                                {/* Tappable QR — clicking downloads the QR code as image and launches UPI app */}
+                                <div
+                                  onClick={() => handleDownloadAndPay(`upi-qr-canvas-${idx}`, t.amount, t.to)}
+                                  title="Tap to download QR and pay"
+                                  className="block rounded-2xl p-4 bg-white border border-white/10 active:scale-95 transition-all cursor-pointer shadow-lg hover:shadow-indigo-500/20"
                                 >
-                                  <QRCodeSVG
+                                  <QRCodeCanvas
+                                    id={`upi-qr-canvas-${idx}`}
                                     value={upiUri}
                                     size={180}
                                     bgColor="#ffffff"
-                                    fgColor="#1e293b"
-                                    level="M"
+                                    fgColor="#0f172a"
+                                    level="H"
                                     includeMargin={false}
                                   />
-                                </a>
+                                </div>
 
                                 {/* UPI ID + amount labels */}
                                 <div className="text-center space-y-0.5">
                                   <p className="text-slate-400 text-[10px] font-mono break-all">{upiId}</p>
-                                  <p className="text-indigo-600 text-xs font-black">₹{formatCurrency(t.amount)}</p>
+                                  <p className="text-indigo-400 text-sm font-black">₹{formatCurrency(t.amount)}</p>
                                 </div>
 
-                                {/* Direct pay button as fallback */}
-                                <a
-                                  href={upiUri}
-                                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-indigo-100"
-                                >
-                                  <Smartphone size={13} />
-                                  Open Payment App
-                                </a>
+                                {/* Quick instructions */}
+                                <div className="w-full bg-slate-950/50 border border-white/5 rounded-2xl p-3 text-[10px] text-slate-300 leading-normal space-y-1">
+                                  <p className="font-bold text-amber-400">SBI / High Amount Gallery Pay Instructions:</p>
+                                  <p>1. Tap the QR image above to download it.</p>
+                                  <p>2. Open your preferred payment app below.</p>
+                                  <p>3. Tap <span className="font-semibold text-white">"Scan QR"</span> inside the app, tap the <span className="font-semibold text-white">Gallery/Photos icon</span>, and choose the downloaded image to pay!</p>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="w-full flex flex-col gap-2">
+                                  <button
+                                    onClick={() => handleDownloadAndPay(`upi-qr-canvas-${idx}`, t.amount, t.to)}
+                                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-indigo-900/30"
+                                  >
+                                    <Download size={13} />
+                                    Download QR Image
+                                  </button>
+
+                                  <div className="grid grid-cols-3 gap-1.5 mt-1">
+                                    <button
+                                      onClick={() => handleDownloadAndPay(`upi-qr-canvas-${idx}`, t.amount, t.to, 'phonepe://')}
+                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/20 rounded-xl transition-all active:scale-95"
+                                    >
+                                      <span className="text-[10px] font-bold">PhonePe</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDownloadAndPay(`upi-qr-canvas-${idx}`, t.amount, t.to, 'gpay://')}
+                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-blue-600/20 hover:bg-blue-600/35 text-blue-300 border border-blue-500/20 rounded-xl transition-all active:scale-95"
+                                    >
+                                      <span className="text-[10px] font-bold">Google Pay</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDownloadAndPay(`upi-qr-canvas-${idx}`, t.amount, t.to, 'paytmmp://')}
+                                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-sky-600/20 hover:bg-sky-600/35 text-sky-300 border border-sky-500/20 rounded-xl transition-all active:scale-95"
+                                    >
+                                      <span className="text-[10px] font-bold">Paytm</span>
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             )}
 
@@ -605,6 +684,22 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
           </div>
         </div>
       </main>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-sm w-11/12">
+          <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 text-white rounded-2xl p-4 shadow-2xl flex items-start gap-3">
+            <CheckCircle2 className="text-emerald-400 flex-shrink-0 mt-0.5" size={18} />
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-slate-200">QR Code Saved!</p>
+              <p className="text-[11px] text-slate-400 leading-normal">{toast.message}</p>
+            </div>
+            <button onClick={() => setToast(null)} className="text-slate-500 hover:text-slate-300 ml-auto">
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
