@@ -350,26 +350,43 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                           {/* UPI Action area */}
                           <div className="px-4 pb-4">
                             {upiId && !exceedsLimit ? (
-                              <div className="flex flex-wrap gap-2 items-center">
-                                {/* Pay via UPI deep-link button */}
-                                <button
-                                  onClick={() => { window.location.href = upiUri; }}
-                                  className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-indigo-900/30"
-                                >
-                                  <Smartphone size={14} />
-                                  Pay via UPI
-                                </button>
-                                {/* QR toggle */}
-                                <button
-                                  onClick={() => setExpandedQr(isQrOpen ? null : idx)}
-                                  className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs transition-all active:scale-95"
-                                >
-                                  <QrCode size={14} />
-                                  {isQrOpen ? 'Hide QR' : 'Show QR'}
-                                </button>
+                              <div className="flex flex-col gap-2">
+                                {/* Buttons row — always shown when UPI ID exists and under ₹1L */}
+                                <div className="flex flex-wrap gap-2 items-center">
+                                  <button
+                                    onClick={() => { window.location.href = upiUri; }}
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-indigo-900/30"
+                                  >
+                                    <Smartphone size={14} />
+                                    Pay via UPI
+                                  </button>
+                                  <button
+                                    onClick={() => setExpandedQr(isQrOpen ? null : idx)}
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs transition-all active:scale-95"
+                                  >
+                                    <QrCode size={14} />
+                                    {isQrOpen ? 'Hide QR' : 'Show QR'}
+                                  </button>
+                                </div>
+                                {/* SBI advisory — shown for amounts > ₹2,000 */}
+                                {t.amount > 2000 && (
+                                  <div className="flex items-start gap-2 px-3 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                                    <AlertTriangle size={13} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                                    <div className="space-y-1">
+                                      <p className="text-amber-300 text-[11px] font-bold">⚠️ SBI users: ₹2,000 per-transaction limit</p>
+                                      <p className="text-amber-400/80 text-[10px] leading-relaxed">To pay ₹{formatCurrency(t.amount)}, you can:</p>
+                                      <ul className="text-amber-400/80 text-[10px] space-y-0.5 pl-2">
+                                        <li>• Split into <span className="text-amber-300 font-bold">{Math.ceil(t.amount / 2000)} payments</span> of ≤₹2,000 via SBI UPI</li>
+                                        <li>• Use <span className="text-amber-300 font-bold">NEFT/IMPS</span> in YONO SBI (no ₹2,000 cap)</li>
+                                        <li>• Pay via Google Pay/PhonePe on <span className="text-amber-300 font-bold">HDFC, ICICI or Axis</span> (limit ₹1,00,000)</li>
+                                        <li>• Raise limit: <span className="text-amber-300 font-bold">YONO SBI → UPI → Settings → Transaction Limit</span></li>
+                                      </ul>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             ) : upiId && exceedsLimit ? (
-                              /* Amount exceeds UPI limit */
+                              /* Amount exceeds absolute UPI limit of ₹1,00,000 */
                               <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-500/15 border border-amber-500/20 rounded-xl">
                                 <AlertTriangle size={14} className="text-amber-400 flex-shrink-0" />
                                 <p className="text-amber-300 text-xs font-medium">
@@ -378,6 +395,7 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                               </div>
                             ) : (
                               /* No UPI ID set for receiver */
+
                               <p className="text-slate-500 text-xs font-medium italic">
                                 Ask {t.to} to add their UPI ID
                               </p>
@@ -386,19 +404,48 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
                             {/* QR Code panel */}
                             {isQrOpen && upiId && !exceedsLimit && (
                               <div className="mt-3 flex flex-col items-center gap-3 bg-white rounded-2xl p-5 animate-in fade-in zoom-in duration-200">
-                                <p className="text-slate-500 text-[11px] font-bold uppercase tracking-wider text-center">Scan to pay {t.to}</p>
-                                <QRCodeSVG
-                                  value={upiUri}
-                                  size={160}
-                                  bgColor="#ffffff"
-                                  fgColor="#1e293b"
-                                  level="M"
-                                  includeMargin={false}
-                                />
-                                <p className="text-slate-400 text-[10px] font-mono text-center break-all">{upiId}</p>
-                                <p className="text-slate-400 text-[10px] font-bold text-center">₹{formatCurrency(t.amount)}</p>
+                                {/* Label */}
+                                <div className="text-center">
+                                  <p className="text-slate-700 text-xs font-black uppercase tracking-wider">Pay ₹{formatCurrency(t.amount)} to {t.to}</p>
+                                  <p className="text-slate-400 text-[10px] mt-0.5">
+                                    📱 <span className="font-bold text-indigo-500">Tap the QR</span> on mobile to open payment app &nbsp;·&nbsp; 🖥️ Scan with another phone on desktop
+                                  </p>
+                                </div>
+
+                                {/* Tappable QR — clicking opens the UPI deep link directly */}
+                                <a
+                                  href={upiUri}
+                                  title="Tap to pay via UPI"
+                                  className="block rounded-2xl p-3 bg-white border-2 border-transparent hover:border-indigo-400 active:scale-95 transition-all cursor-pointer shadow-md hover:shadow-indigo-100 ring-0 hover:ring-4 hover:ring-indigo-100"
+                                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                                >
+                                  <QRCodeSVG
+                                    value={upiUri}
+                                    size={180}
+                                    bgColor="#ffffff"
+                                    fgColor="#1e293b"
+                                    level="M"
+                                    includeMargin={false}
+                                  />
+                                </a>
+
+                                {/* UPI ID + amount labels */}
+                                <div className="text-center space-y-0.5">
+                                  <p className="text-slate-400 text-[10px] font-mono break-all">{upiId}</p>
+                                  <p className="text-indigo-600 text-xs font-black">₹{formatCurrency(t.amount)}</p>
+                                </div>
+
+                                {/* Direct pay button as fallback */}
+                                <a
+                                  href={upiUri}
+                                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-lg shadow-indigo-100"
+                                >
+                                  <Smartphone size={13} />
+                                  Open Payment App
+                                </a>
                               </div>
                             )}
+
                           </div>
                         </div>
                       );
