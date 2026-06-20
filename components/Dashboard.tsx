@@ -87,14 +87,12 @@ const Dashboard = ({ user, onLogout, userMembers, predefinedExpenses, familyId }
       }
     }
 
-    // Open the target UPI app after a short delay
-    setTimeout(() => {
-      if (customUpiAppScheme) {
-        window.location.href = customUpiAppScheme;
-      } else {
-        window.location.href = "upi://";
-      }
-    }, 1200);
+    // Direct synchronous redirection to prevent mobile browsers from blocking custom URI schemes as popups
+    if (customUpiAppScheme) {
+      window.location.href = customUpiAppScheme;
+    } else {
+      window.location.href = "upi://";
+    }
   };
 
   // UI STATES
