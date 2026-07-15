@@ -20,6 +20,8 @@ export const DEFAULT_SHOPS_DATA = [
   { name: 'Dental', baseRent: 13000 },
   { name: 'Gym', baseRent: 45000 },
   { name: 'Bhavya Clinic', baseRent: 10500 },
+    { name: 'Ladies Emporium', baseRent: 13000},
+    
 ];
 
 export const DEFAULT_PREDEFINED_EXPENSES = [
